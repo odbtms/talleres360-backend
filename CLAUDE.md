@@ -12,10 +12,10 @@ Evaluación Final Transversal DSY1107 (Desarrollo Cloud Native I). Caso "Tallere
 
 | Carpeta local | Repo | Contenido |
 |---|---|---|
-| `taller-360/taller-360/` (esta) | `talleres360-backend` (público) | Microservicios + `infra/` |
-| `taller-360/talleres360-frontend/` | `talleres360-frontend` (nombre propuesto, falta confirmar) | SPA React |
+| `taller-360/taller-360/` (esta) | https://github.com/odbtms/talleres360-backend (público) | Microservicios + `infra/` |
+| `taller-360/talleres360-frontend/` | https://github.com/odbtms/talleres360-frontend (público) | SPA React |
 
-Ambos tienen `git init` y un commit inicial en `main`. **Aún no se hizo push**: `gh` no tiene sesión (el usuario debe ejecutar `! gh auth login`, después crear el repo con `gh repo create talleres360-backend --public --source . --push`).
+Rama `main` en ambos, remoto `origin`. `gh` autenticado como `odbtms` (HTTPS).
 
 Backend en monorepo a propósito: la EC2 hace `git clone` + `docker compose up` y el compose construye cada micro desde su carpeta.
 
@@ -103,7 +103,7 @@ Front ── PUT /api/orders/7/status + Bearer ──▶ API Gateway (valida JWT
 
 ## Pendientes (en orden)
 
-1. [ ] `! gh auth login` → crear y pushear `talleres360-backend` (público). Confirmar nombre/visibilidad del repo del front y pushearlo.
+1. [x] Repos creados y subidos a GitHub (backend y frontend, públicos).
 2. [ ] **Entra ID** (portal):
    - api-fullstack: manifest v2, exponer API `api://<API_CLIENT_ID>`, scope `access_as_user`, **app roles** Admin/Operador/Cliente.
    - spa-fullstack: plataforma SPA con las dos redirect URIs, permiso delegado + consentimiento admin.
