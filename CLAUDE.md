@@ -105,6 +105,25 @@ Front ── PUT /api/orders/7/status + Bearer ──▶ API Gateway (valida JWT
 | H5: 401 sin token / 200 con token (curl desde PowerShell, token con `Read-Host`) | Igual + 403 con rol incorrecto |
 | JDK 25 | Instalar JDK 25 (hoy solo hay 17) |
 
+## Lo que el usuario tiene que enviar (para seguir con Entra ID)
+
+Capturas del portal de Azure (se pegan en la terminal con `Alt + V`, arrastrando la imagen o indicando la ruta del archivo). **Nunca** enviar valores de client secrets ni access tokens (`eyJ...`); los IDs sí se pueden mostrar.
+
+- [ ] **api-fullstack** (registro de la API, el usuario ya lo creó):
+  - Información general → `TENANT_ID` y `API_CLIENT_ID`.
+  - Exponer una API → URI `api://<API_CLIENT_ID>` y scope `access_as_user` habilitado.
+  - Roles de aplicación → Admin / Operador / Cliente (si no existen, hay que crearlos).
+  - Manifiesto → `requestedAccessTokenVersion` (debe ser `2`).
+- [ ] **spa-fullstack** (si ya existe; si no, se crea siguiendo el tutorial):
+  - Información general → `SPA_CLIENT_ID`.
+  - Autenticación → plataforma SPA con `http://localhost:5173/redirect.html` y `http://localhost:5173`.
+  - Permisos de API → `access_as_user` delegado con consentimiento de administrador concedido.
+- [ ] **Usuarios de prueba** creados y con rol asignado (Aplicaciones empresariales > api-fullstack > Usuarios y grupos).
+- [ ] Confirmar si el profe acepta **React** en vez de Angular (el enunciado dice Angular 18+).
+- [ ] Confirmar instalación de **JDK 25** (lo pide el tutorial; hoy solo hay 17).
+
+Con esos datos: completar `talleres360-frontend/.env.local`, probar login real (H4) y crear el BFF (H5).
+
 ## Pendientes (en orden)
 
 1. [x] Repos creados y subidos a GitHub (backend y frontend, públicos).
