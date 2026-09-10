@@ -50,9 +50,13 @@ Backend en monorepo a propósito: la EC2 hace `git clone` + `docker compose up` 
 - React 19 + Vite 8, **JavaScript** (el tutorial usa TypeScript → pendiente migrar).
 - Puerto fijo 5173 (`strictPort`).
 - Pantalla única: tabla con filtros (estado, desde/hasta), formulario crear/editar con ítems, panel de detalle con botones solo para transiciones válidas, eliminar, alerta con errores del backend.
-- `src/api/http.js`: URL base desde `VITE_API_URL` + `setTokenProvider()` como gancho para que MSAL agregue `Authorization: Bearer`.
+- `src/api/http.js`: URL base desde `VITE_API_BASE_URL` (default `http://localhost:8081`) + `setTokenProvider()` que agrega `Authorization: Bearer`.
 - `src/constants/orderStatus.js` replica las transiciones de `OrderStatus.java`.
-- Aún **sin login**: llama directo a `localhost:8081`.
+- **Login con Entra ID ya implementado** igual que el tutorial: `@azure/msal-browser@5.21` + `@azure/msal-react@5.7`, `loginPopup` con `prompt: select_account`, `redirect.html` (`broadcastResponseToMainFrame`), Vite multipágina, `sessionStorage`, `acquireTokenSilent` → `acquireTokenPopup`, `logoutPopup`. Archivos en `src/auth/` (`authConfig.js`, `token.js`, `AuthGate.jsx`, `LoginPage.jsx`).
+- Variables en `.env.local` (nombres del tutorial): `VITE_ENTRA_TENANT_ID`, `VITE_SPA_CLIENT_ID`, `VITE_API_CLIENT_ID`, `VITE_API_BASE_URL`.
+- **Modo local**: si faltan los 3 IDs de Entra, el login muestra aviso + botón "Entrar en modo local (solo desarrollo)". Con los IDs completos el login Microsoft es obligatorio. Header muestra usuario y "Cerrar sesión".
+- `AuthGate` monta la app recién después de registrar el token provider (si no, la primera llamada saldría sin token).
+- Login real **aún no probado**: faltan los IDs reales de Entra ID.
 
 ## Arquitectura objetivo (acordada, aún no implementada)
 
@@ -109,7 +113,7 @@ Front ── PUT /api/orders/7/status + Bearer ──▶ API Gateway (valida JWT
    - spa-fullstack: plataforma SPA con las dos redirect URIs, permiso delegado + consentimiento admin.
    - Usuarios de prueba (ej. alumno01…) con roles asignados en Aplicaciones empresariales > api-fullstack > Usuarios y grupos.
    - Anotar `TENANT_ID`, `API_CLIENT_ID`, `SPA_CLIENT_ID` (no son secretos; nunca pegar client secrets ni tokens en el chat).
-3. [ ] **Front**: migrar a TypeScript, renombrar variables a las del tutorial, agregar MSAL 5 (authConfig, token, redirect.html, Vite multipágina), login/logout, conectar `setTokenProvider`, mostrar/ocultar acciones según rol. Hito H4.
+3. [~] **Front**: ✔ MSAL 5 (authConfig, token, redirect.html, Vite multipágina), login/logout, `setTokenProvider`, variables del tutorial, modo local. Falta: completar `.env.local` con IDs reales y probar login (Hito H4), mostrar/ocultar acciones según rol, (opcional) migrar a TypeScript.
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
 5. [ ] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`). Hito H5 (401/200/403). Agregar al compose.
 6. [ ] Ajustar compose: solo exponer el BFF; orders y Postgres sin puertos públicos. Mover CORS fuera del micro.
