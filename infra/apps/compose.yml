@@ -1,0 +1,51 @@
+# Microservicios Talleres360 (VM ec2-apps)
+# Uso: docker compose -f infra/apps/compose.yml up -d --build
+# Credenciales: se pueden sobreescribir con un archivo infra/apps/.env (DB_USERNAME, DB_PASSWORD)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: talleres360-postgres
+    environment:
+      POSTGRES_DB: orders_db
+      POSTGRES_USER: ${DB_USERNAME:-talleres360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - talleres360
+
+  orders:
+    build: ../../ms-talleres360-orders
+    image: talleres360/ms-orders:latest
+    container_name: ms-talleres360-orders
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      TZ: America/Santiago
+      DB_URL: jdbc:postgresql://postgres:5432/orders_db
+      DB_USERNAME: ${DB_USERNAME:-talleres360}
+      DB_PASSWORD: ${DB_PASSWORD:-talleres360}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - talleres360
+
+volumes:
+  pgdata:
+
+networks:
+  talleres360:
+    name: talleres360
