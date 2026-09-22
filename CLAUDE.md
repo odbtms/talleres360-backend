@@ -140,8 +140,17 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
 5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). Falta el 403 en vivo (necesita un usuario con otro rol).
 6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
-7. [ ] **Parte 2**: EC2 con Docker Compose, API Gateway HTTP API con JWT Authorizer (issuer/audience de Azure) + CORS + rutas `/api/orders/*` (luego catalog/report) → BFF, `VITE_API_BASE_URL` = URL del Gateway. Security Groups mínimos.
+7. [ ] **Parte 2 — AWS** (lo que sigue). Todo lo de Azure ya está listo y probado, así que esto es puro despliegue:
+   - **EC2**: `git clone` del repo backend, crear a mano `infra/apps/.env` (no viaja en git: lleva `ENTRA_TENANT_ID`, `API_CLIENT_ID`, credenciales de la base y `CORS_ALLOWED_ORIGINS`), luego `docker compose -f infra/apps/compose.yml up -d --build`. El compose ya deja solo el BFF expuesto (8080).
+   - **API Gateway (HTTP API)**: autorizador **JWT** con `Issuer = https://login.microsoftonline.com/73b420e9-.../v2.0` (el tenant) y `Audience = API_CLIENT_ID`; ruta `ANY /api/orders/{proxy+}` con integración HTTP hacia `http://<IP-EC2>:8080/api/orders/{proxy+}`; CORS con el origen del front. Después se agregan catalog y report igual.
+   - **Security Group**: entrada 8080 (la integración HTTP de API Gateway sale por IPs públicas de AWS, no hay rango fijo; si se quiere cerrar de verdad, la alternativa es VPC Link con un ALB interno) y 22 solo desde tu IP. Postgres y orders no necesitan ninguna regla: viven en la red de Docker.
+   - **Front**: `VITE_API_BASE_URL` = URL del Gateway. Si el front deja de correr en `localhost:5173`, hay que agregar la nueva URL en spa-cloud > Autenticación (redirect URIs) y en `CORS_ALLOWED_ORIGINS`.
+   - La validación queda doble, como pide la rúbrica: API Gateway rechaza el token inválido y el BFF lo vuelve a validar y revisa el rol.
 8. [ ] Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
+
+## Cómo retomar
+
+Todo quedó funcionando y **apagado** (compose abajo, dev server detenido). Para levantar de nuevo: iniciar Docker Desktop, `docker compose -f infra/apps/compose.yml up -d --build` y `npm run dev` en el front. Los archivos de entorno (`infra/apps/.env` y `talleres360-frontend/.env.local`) ya están escritos en el disco local; **no están en git**, así que en otra máquina (o en la EC2) hay que recrearlos a partir de `infra/apps/.env.example`.
 
 ## Comandos útiles
 
