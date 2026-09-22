@@ -1,0 +1,23 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: ms-talleres360-bff
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Token v2 de Entra ID. Con requestedAccessTokenVersion 1 el issuer seria
+          # https://sts.windows.net/<tenant>/ y la validacion fallaria.
+          issuer-uri: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0
+          # La audiencia del access token es el registro api-fullstack
+          audiences: ${API_CLIENT_ID}
+
+app:
+  services:
+    # Red interna de Docker: el micro no se expone fuera de la VM
+    orders-url: ${ORDERS_URL:http://localhost:8081}
+  cors:
+    # Temporal hasta que API Gateway maneje CORS. Separar varios origenes con coma.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

@@ -42,9 +42,23 @@ Backend en monorepo a propósito: la EC2 hace `git clone` + `docker compose up` 
 - Dockerfile multi-stage (cache de dependencias, JRE 17, usuario no root).
 - TODOs en `WorkOrderService`: descontar stock al aceptar (ms-catalog), publicar eventos Kafka (`orders.events`), notificación RabbitMQ (`email.send`).
 
+### ms-talleres360-bff (`ms-talleres360-bff/`)
+- Spring Boot 3.5.6, Java 17. Puerto **8080**. Es el único servicio expuesto hacia afuera.
+- Solo hace lo del mapa: valida el JWT, autoriza por rol y reenvía. **Sin base de datos ni reglas de negocio** (no duplica los estados de la orden).
+- `SecurityConfig`: `STATELESS`, csrf off, `anyRequest().denyAll()`; cada ruta exige `SCOPE_access_as_user` **y** un app role:
+  - `GET /api/orders`, `GET /api/orders/**` → Admin, Operador, Cliente
+  - `POST /api/orders` y `PUT /api/orders/**` (incluye `/status`) → Admin, Operador
+  - `DELETE /api/orders/**` → Admin
+- `jwtAuthenticationConverter` mapea el claim `roles` de Entra ID a `ROLE_Admin` / `ROLE_Operador` / `ROLE_Cliente` (Spring por defecto solo mapea `scp` → `SCOPE_*`).
+- Validación del token por configuración (como el tutorial): `issuer-uri: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0` + `audiences: ${API_CLIENT_ID}`. El decoder es lazy: la app arranca sin conexión a Entra, pero **sin esas dos variables no arranca** (placeholder sin default, a propósito).
+- `OrdersProxyController`: `@RequestMapping("/api/orders/**")` reenvía método, query y body a `ORDERS_URL` (`http://orders:8081`) con `RestClient` y devuelve estado y cuerpo tal cual (incluidos los `ProblemDetail` 400/404/409). No reenvía el `Authorization`: orders está en la red interna.
+- CORS propio (`CorsConfig`, `CORS_ALLOWED_ORIGINS`) marcado como temporal: cuando entre API Gateway se quita.
+- Tests: `SecurityRulesTest` (401 sin token; 403 por rol incorrecto, por falta de scope y por ruta no mapeada) y `RolesClaimConverterTest`. El **200 del hito H5** se prueba end-to-end con el compose (requiere token real de Entra).
+
 ### Infra (`infra/apps/compose.yml`)
-- Servicios `postgres` (16-alpine, volumen `pgdata`, healthcheck) y `orders` (puerto 8081, `TZ=America/Santiago`, espera a Postgres healthy). Red `talleres360`.
-- Credenciales de prueba `talleres360/talleres360`; las reales van en `infra/apps/.env` (ignorado por git).
+- Servicios `postgres` (16-alpine, volumen `pgdata`, healthcheck), `orders` y `bff`. Red `talleres360`.
+- **Solo `bff` publica puerto (8080)**. `orders` usa `expose: 8081` y Postgres no publica nada (su mapeo quedó comentado por si hace falta inspeccionar la base).
+- Variables en `infra/apps/.env` (ignorado por git); plantilla en `infra/apps/.env.example`: `DB_USERNAME`, `DB_PASSWORD`, `ENTRA_TENANT_ID`, `API_CLIENT_ID`, `CORS_ALLOWED_ORIGINS`.
 
 ### Frontend (`../talleres360-frontend/`)
 - React 19 + Vite 8, **JavaScript** (el tutorial usa TypeScript → pendiente migrar).
@@ -134,8 +148,9 @@ Con esos datos: completar `talleres360-frontend/.env.local`, probar login real (
    - Anotar `TENANT_ID`, `API_CLIENT_ID`, `SPA_CLIENT_ID` (no son secretos; nunca pegar client secrets ni tokens en el chat).
 3. [~] **Front**: ✔ MSAL 5 (authConfig, token, redirect.html, Vite multipágina), login/logout, `setTokenProvider`, variables del tutorial, modo local. Falta: completar `.env.local` con IDs reales y probar login (Hito H4), mostrar/ocultar acciones según rol, (opcional) migrar a TypeScript.
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
-5. [ ] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`). Hito H5 (401/200/403). Agregar al compose.
-6. [ ] Ajustar compose: solo exponer el BFF; orders y Postgres sin puertos públicos. Mover CORS fuera del micro.
+5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. Falta el 200 del hito H5 con token real.
+6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
+   - Falta apuntar el front al BFF: `VITE_API_BASE_URL=http://localhost:8080`.
 7. [ ] **Parte 2**: EC2 con Docker Compose, API Gateway HTTP API con JWT Authorizer (issuer/audience de Azure) + CORS + rutas `/api/orders/*` (luego catalog/report) → BFF, `VITE_API_BASE_URL` = URL del Gateway. Security Groups mínimos.
 8. [ ] Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
 
@@ -144,11 +159,16 @@ Con esos datos: completar `talleres360-frontend/.env.local`, probar login real (
 ```bash
 # Backend en Docker (desde esta carpeta)
 docker compose -f infra/apps/compose.yml up -d --build
-docker compose -f infra/apps/compose.yml logs -f orders
+docker compose -f infra/apps/compose.yml logs -f bff
 docker compose -f infra/apps/compose.yml down
 
-# Tests del micro (H2)
+# Tests
 cd ms-talleres360-orders && ./mvnw test
+cd ms-talleres360-bff && ./mvnw test
+
+# Hito H5 (con el compose arriba)
+curl -i http://localhost:8080/api/orders                              # 401
+curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/orders   # 200 / 403 segun el rol
 
 # Front
 cd ../talleres360-frontend && npm run dev   # http://localhost:5173

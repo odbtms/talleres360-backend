@@ -1,6 +1,9 @@
 # Microservicios Talleres360 (VM ec2-apps)
 # Uso: docker compose -f infra/apps/compose.yml up -d --build
-# Credenciales: se pueden sobreescribir con un archivo infra/apps/.env (DB_USERNAME, DB_PASSWORD)
+# Variables (infra/apps/.env): DB_USERNAME, DB_PASSWORD, ENTRA_TENANT_ID, API_CLIENT_ID
+#
+# Solo el BFF se publica hacia afuera. Postgres y los microservicios quedan en la red
+# interna "talleres360": se hablan por nombre de servicio y no son alcanzables desde internet.
 
 services:
   postgres:
@@ -10,8 +13,9 @@ services:
       POSTGRES_DB: orders_db
       POSTGRES_USER: ${DB_USERNAME:-talleres360}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
-    ports:
-      - "5432:5432"
+    # Descomentar solo para inspeccionar la base desde el equipo local
+    # ports:
+    #   - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,8 +31,9 @@ services:
     build: ../../ms-talleres360-orders
     image: talleres360/ms-orders:latest
     container_name: ms-talleres360-orders
-    ports:
-      - "8081:8081"
+    # Sin "ports": solo el BFF lo llama, por la red interna (http://orders:8081)
+    expose:
+      - "8081"
     environment:
       SPRING_PROFILES_ACTIVE: postgres
       TZ: America/Santiago
@@ -39,6 +44,25 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - talleres360
+
+  bff:
+    build: ../../ms-talleres360-bff
+    image: talleres360/ms-bff:latest
+    container_name: ms-talleres360-bff
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: America/Santiago
+      # Identidades de Entra ID (no son secretos, pero van en infra/apps/.env)
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
+      API_CLIENT_ID: ${API_CLIENT_ID}
+      ORDERS_URL: http://orders:8081
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+    depends_on:
+      - orders
     restart: unless-stopped
     networks:
       - talleres360
