@@ -119,38 +119,27 @@ Front ── PUT /api/orders/7/status + Bearer ──▶ API Gateway (valida JWT
 | H5: 401 sin token / 200 con token (curl desde PowerShell, token con `Read-Host`) | Igual + 403 con rol incorrecto |
 | JDK 25 | Instalar JDK 25 (hoy solo hay 17) |
 
-## Lo que el usuario tiene que enviar (para seguir con Entra ID)
+## Pendiente del usuario (fuera del código)
 
-Capturas del portal de Azure (se pegan en la terminal con `Alt + V`, arrastrando la imagen o indicando la ruta del archivo). **Nunca** enviar valores de client secrets ni access tokens (`eyJ...`); los IDs sí se pueden mostrar.
-
-- [ ] **api-fullstack** (registro de la API, el usuario ya lo creó):
-  - Información general → `TENANT_ID` y `API_CLIENT_ID`.
-  - Exponer una API → URI `api://<API_CLIENT_ID>` y scope `access_as_user` habilitado.
-  - Roles de aplicación → Admin / Operador / Cliente (si no existen, hay que crearlos).
-  - Manifiesto → `requestedAccessTokenVersion` (debe ser `2`).
-- [ ] **spa-fullstack** (si ya existe; si no, se crea siguiendo el tutorial):
-  - Información general → `SPA_CLIENT_ID`.
-  - Autenticación → plataforma SPA con `http://localhost:5173/redirect.html` y `http://localhost:5173`.
-  - Permisos de API → `access_as_user` delegado con consentimiento de administrador concedido.
-- [ ] **Usuarios de prueba** creados y con rol asignado (Aplicaciones empresariales > api-fullstack > Usuarios y grupos).
+- [ ] Crear `operador01` y `cliente01` en el tenant y asignarles rol en Aplicaciones empresariales > api-cloud > Usuarios y grupos (para la evidencia del 403).
 - [ ] Confirmar si el profe acepta **React** en vez de Angular (el enunciado dice Angular 18+).
-- [ ] Confirmar instalación de **JDK 25** (lo pide el tutorial; hoy solo hay 17).
+- [ ] Conseguir la **Parte 2** del tutorial (EC2, HTTPS, API Gateway) antes de armar la infra de AWS.
+- [ ] Instalar **JDK 25** (lo pide el tutorial; hoy solo hay 17).
 
-Con esos datos: completar `talleres360-frontend/.env.local`, probar login real (H4) y crear el BFF (H5).
+Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar client secrets ni access tokens (`eyJ...`); los IDs sí se pueden mostrar.
 
 ## Pendientes (en orden)
 
 1. [x] Repos creados y subidos a GitHub (backend y frontend, públicos).
-2. [ ] **Entra ID** (portal):
-   - api-fullstack: manifest v2, exponer API `api://<API_CLIENT_ID>`, scope `access_as_user`, **app roles** Admin/Operador/Cliente.
-   - spa-fullstack: plataforma SPA con las dos redirect URIs, permiso delegado + consentimiento admin.
-   - Usuarios de prueba (ej. alumno01…) con roles asignados en Aplicaciones empresariales > api-fullstack > Usuarios y grupos.
-   - Anotar `TENANT_ID`, `API_CLIENT_ID`, `SPA_CLIENT_ID` (no son secretos; nunca pegar client secrets ni tokens en el chat).
-3. [~] **Front**: ✔ MSAL 5 (authConfig, token, redirect.html, Vite multipágina), login/logout, `setTokenProvider`, variables del tutorial, modo local. Falta: completar `.env.local` con IDs reales y probar login (Hito H4), mostrar/ocultar acciones según rol, (opcional) migrar a TypeScript.
+2. [x] **Entra ID** listo (tenant `tocortess.onmicrosoft.com`). Registros reales: **`api-cloud`** (API) y **`spa-cloud`** (SPA) — no se llaman como en el tutorial.
+   - api-cloud: `requestedAccessTokenVersion: 2`, `api://<API_CLIENT_ID>` con scope `access_as_user`, app roles Admin/Operador/Cliente (valor exacto, así los mapea el BFF).
+   - spa-cloud: plataforma SPA con `http://localhost:5173/redirect.html` y `http://localhost:5173`; `access_as_user` delegado con consentimiento de administrador.
+   - Los IDs están en `talleres360-frontend/.env.local` y `infra/apps/.env` (ambos fuera de git; los repos son públicos).
+   - Falta solo crear `operador01` y `cliente01` en el tenant y asignarles rol, para la evidencia del 403.
+3. [~] **Front**: ✔ MSAL 5, login/logout, `setTokenProvider`, `.env.local` con los IDs reales y `VITE_API_BASE_URL=http://localhost:8080` (BFF). **Hito H4 probado OK**. Falta: mostrar/ocultar acciones según rol, (opcional) migrar a TypeScript.
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
-5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. Falta el 200 del hito H5 con token real.
+5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). Falta el 403 en vivo (necesita un usuario con otro rol).
 6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
-   - Falta apuntar el front al BFF: `VITE_API_BASE_URL=http://localhost:8080`.
 7. [ ] **Parte 2**: EC2 con Docker Compose, API Gateway HTTP API con JWT Authorizer (issuer/audience de Azure) + CORS + rutas `/api/orders/*` (luego catalog/report) → BFF, `VITE_API_BASE_URL` = URL del Gateway. Security Groups mínimos.
 8. [ ] Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
 
@@ -178,3 +167,7 @@ cd ../talleres360-frontend && npm run dev   # http://localhost:5173
 - Docker Desktop a veces no está iniciado: `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"`.
 - En PowerShell 5.1, `@(Invoke-RestMethod ...).Count` cuenta 1 para un arreglo JSON vacío: revisar el JSON crudo con `Invoke-WebRequest`.
 - `target/` y `dist/` son salidas de build (ignoradas); se regeneran solas.
+- **403 en el BFF con token válido** = el token no trae el claim `roles` (el 401 sería firma/issuer/audience). Para diagnosticar: `SECURITY_LOG_LEVEL=DEBUG` en `infra/apps/.env` + `docker compose ... up -d bff`, y buscar `Granted Authorities=[...]` en los logs.
+- Los app roles se asignan en **Aplicaciones empresariales > api-cloud > Usuarios y grupos**, no en el registro de aplicación.
+- El rol se asigna a una identidad concreta: `tomas@tocortess.onmicrosoft.com` (nativo) y `to.cortess@duocuc.cl` (invitado `#EXT#`) son usuarios distintos. La contraseña de un invitado no se puede resetear desde el tenant; la de un usuario nativo sí (Entra ID > Usuarios > usuario > Restablecer contraseña).
+- Tras asignar un rol hay que **cerrar sesión y volver a entrar**: MSAL cachea el token en `sessionStorage`.
