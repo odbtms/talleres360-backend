@@ -6,6 +6,8 @@ Evaluación Final Transversal DSY1107 (Desarrollo Cloud Native I). Caso "Tallere
 - Tutorial del profe (guía a replicar): `Tutorial_Entra_ID_React_SpringBoot_Parte1.pdf` (en esta carpeta). La Parte 2 (EC2, HTTPS, API Gateway) todavía no la tenemos.
 - Los PDF **no se publican**: `*.pdf` está en `.gitignore`.
 
+**Alcance real de esta evaluación (dicho por el profe):** basta con que funcione el **viaje del token** (Front MSAL → Entra ID → API Gateway → BFF → un microservicio con GET/POST/PUT/DELETE). El micro elegido es **ms-orders**. Catalog, report, notify, audit, RabbitMQ y Kafka del enunciado **no se piden** para esta entrega.
+
 **Preferencias del usuario:** responder en español, conciso, sin explayarse; ir paso a paso y confirmar el flujo antes de aplicar cambios grandes.
 
 ## Repositorios y carpetas
@@ -146,7 +148,7 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
    - **Security Group**: entrada 8080 (la integración HTTP de API Gateway sale por IPs públicas de AWS, no hay rango fijo; si se quiere cerrar de verdad, la alternativa es VPC Link con un ALB interno) y 22 solo desde tu IP. Postgres y orders no necesitan ninguna regla: viven en la red de Docker.
    - **Front**: `VITE_API_BASE_URL` = URL del Gateway. Si el front deja de correr en `localhost:5173`, hay que agregar la nueva URL en spa-cloud > Autenticación (redirect URIs) y en `CORS_ALLOWED_ORIGINS`.
    - La validación queda doble, como pide la rúbrica: API Gateway rechaza el token inválido y el BFF lo vuelve a validar y revisa el rol.
-8. [ ] Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
+8. [—] **Fuera del alcance de esta entrega** (ver "Alcance real"). Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
 
 ## Cómo retomar
 
