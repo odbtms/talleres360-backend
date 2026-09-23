@@ -6,7 +6,8 @@ Backend cloud-native (Spring Boot) para la gestión de órdenes de trabajo de un
 
 ```
 ms-talleres360-orders/   Microservicio de órdenes de trabajo (CRUD + estados)
-infra/apps/compose.yml   Docker Compose de la VM de aplicaciones (EC2)
+infra/ms/compose.yml     Docker Compose de la VM de microservicios (ec2-apps)
+infra/apps/compose.yml   Todo junto en local (construye el BFF desde ../talleres360-bff)
 ```
 
 BFF (validación JWT de Entra ID + roles): repo aparte https://github.com/odbtms/talleres360-bff.
