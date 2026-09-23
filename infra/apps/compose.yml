@@ -1,4 +1,5 @@
-# Talleres360 todo junto (desarrollo local). En AWS se usa infra/ms (ec2-apps) + infra/bff (ec2-bff).
+# Talleres360 todo junto (desarrollo local). El BFF se construye desde el repo hermano ../talleres360-bff.
+# En AWS: infra/ms en ec2-apps y el repo talleres360-bff en ec2-bff.
 # Uso: docker compose -f infra/apps/compose.yml up -d --build
 # Variables (infra/apps/.env): DB_USERNAME, DB_PASSWORD, ENTRA_TENANT_ID, API_CLIENT_ID
 #
@@ -49,7 +50,7 @@ services:
       - talleres360
 
   bff:
-    build: ../../ms-talleres360-bff
+    build: ../../../talleres360-bff
     image: talleres360/ms-bff:latest
     container_name: ms-talleres360-bff
     ports:

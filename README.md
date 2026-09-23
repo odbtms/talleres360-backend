@@ -9,7 +9,9 @@ ms-talleres360-orders/   Microservicio de órdenes de trabajo (CRUD + estados)
 infra/apps/compose.yml   Docker Compose de la VM de aplicaciones (EC2)
 ```
 
-Próximos: `ms-talleres360-bff` (validación JWT Azure + roles), `ms-talleres360-catalog`, `ms-talleres360-report`, `infra/mq`, `infra/kafka`.
+BFF (validación JWT de Entra ID + roles): repo aparte https://github.com/odbtms/talleres360-bff.
+
+Próximos: `ms-talleres360-catalog`, `ms-talleres360-report`, `infra/mq`, `infra/kafka`.
 
 ## Levantar con Docker
 

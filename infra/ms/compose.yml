@@ -2,7 +2,7 @@
 # Uso: docker compose -f infra/ms/compose.yml up -d --build
 # Variables (infra/ms/.env): DB_USERNAME, DB_PASSWORD, CORS_ALLOWED_ORIGINS
 #
-# El BFF corre en otra VM (ec2-bff) y llama a orders por la IP privada de esta VM (puerto 8081).
+# El BFF (repo talleres360-bff) corre en otra VM (ec2-bff) y llama a orders por la IP privada de esta VM (puerto 8081).
 # El security group de ec2-apps solo deja entrar al 8081 desde el security group del BFF.
 # Postgres no publica puertos: solo lo ve orders por la red interna.
 
