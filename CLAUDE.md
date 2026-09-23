@@ -125,7 +125,7 @@ Front ── PUT /api/orders/7/status + Bearer ──▶ API Gateway (valida JWT
 
 - [x] Usuarios `operador01@` y `cliente01@tocortess.onmicrosoft.com` creados y con rol (Operador / Cliente); `tomas@` es Admin.
 - [x] El profe **acepta React** en vez de Angular (el enunciado decía Angular 18+).
-- [ ] Conseguir la **Parte 2** del tutorial (EC2, HTTPS, API Gateway) antes de armar la infra de AWS.
+- [—] Parte 2 del tutorial: ya no bloquea (AWS se armó con nuestro plan). Si llega, comparar y ajustar.
 - [ ] Instalar **JDK 25** (lo pide el tutorial; hoy solo hay 17).
 
 Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar client secrets ni access tokens (`eyJ...`); los IDs sí se pueden mostrar.
@@ -138,9 +138,9 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
    - spa-cloud: plataforma SPA con `http://localhost:5173/redirect.html` y `http://localhost:5173`; `access_as_user` delegado con consentimiento de administrador.
    - Los IDs están en `talleres360-frontend/.env.local` y `infra/apps/.env` (ambos fuera de git; los repos son públicos).
    - Usuarios de prueba: `tomas@` (Admin), `operador01@` (Operador), `cliente01@` (Cliente), todos `@tocortess.onmicrosoft.com`. Plan gratuito: solo se asignan usuarios, no grupos; cada fila de "Usuarios y grupos" es usuario+rol (editarla reemplaza el rol, para otro rol se agrega fila).
-3. [~] **Front**: ✔ MSAL 5, login/logout, `setTokenProvider`, `.env.local` con los IDs reales y `VITE_API_BASE_URL=http://localhost:8080` (BFF). **Hito H4 probado OK**. ✔ Acciones según rol (`src/auth/roles.js` lee `roles` del **access token**, no del id token, porque los roles están en api-cloud; Admin todo, Operador sin eliminar, Cliente solo lectura; modo local = Admin), probado con los 3 usuarios. Falta (opcional) migrar a TypeScript.
+3. [~] **Front**: ✔ MSAL 5, login/logout, `setTokenProvider`, `.env.local` con los IDs reales y `VITE_API_BASE_URL` = **URL del API Gateway** (antes `http://localhost:8080`, el BFF local). **Hito H4 probado OK**. ✔ Acciones según rol (`src/auth/roles.js` lee `roles` del **access token**, no del id token, porque los roles están en api-cloud; Admin todo, Operador sin eliminar, Cliente solo lectura; modo local = Admin), probado con los 3 usuarios (contra el BFF local). Falta (opcional) migrar a TypeScript.
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
-5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). Falta el 403 en vivo (necesita un usuario con otro rol).
+5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). 403 en vivo: la UI ya oculta acciones por rol; falta la evidencia con curl (ver "Pruebas pendientes").
 6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
 7. [~] **AWS desplegado (Learner Lab, us-east-1)**, creado con AWS CLI (credenciales del lab en `~/.aws/credentials [default]`, caducan al reiniciar el lab):
    - EC2 `ec2-apps` `i-052299a94765b3fa1` (AL2023, t3.medium, 20 GB, key `vockey`), **Elastic IP `98.89.96.254`**. SSH: `ssh -i ~/.ssh/labsuser.pem ec2-user@98.89.96.254`. Repo en `~/talleres360-backend`, `.env` copiado por scp. User-data instala docker, compose, buildx y git.
@@ -165,8 +165,38 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 
 Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-052299a94765b3fa1` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 del SG para poder entrar por SSH.
 
+### Pruebas pendientes (end-to-end por AWS, sacar captura de cada una)
 
-Todo quedó funcionando y **apagado** (compose abajo, dev server detenido). Para levantar de nuevo: iniciar Docker Desktop, `docker compose -f infra/apps/compose.yml up -d --build` y `npm run dev` en el front. Los archivos de entorno (`infra/apps/.env` y `talleres360-frontend/.env.local`) ya están escritos en el disco local; **no están en git**, así que en otra máquina (o en la EC2) hay que recrearlos a partir de `infra/apps/.env.example`.
+Gateway: `GW=https://sapz07gi18.execute-api.us-east-1.amazonaws.com`. Token: F12 > Application > Session Storage > clave con `accesstoken` > campo `secret`; en PowerShell `$TOKEN = Read-Host "token"` (nunca pegarlo en el chat).
+
+| # | Prueba | Esperado | Estado |
+|---|---|---|---|
+| 1 | `curl.exe -i $GW/api/orders` sin token | 401 del **Gateway** | ✔ |
+| 2 | Token basura contra el Gateway | 401 `invalid_token` (no llega al BFF) | ✔ |
+| 3 | Preflight OPTIONS desde `localhost:5173` | 200 con `access-control-allow-origin` | ✔ |
+| 4 | Login `tomas` (Admin) en el front → lista carga desde AWS | 200, se ven órdenes | ☐ |
+| 5 | Admin: crear orden, aceptar, pasar por estados hasta ENTREGADA | 201 / 200; entregar sin aceptar → 409 | ☐ |
+| 6 | Admin: editar (solo RECIBIDA) y eliminar | 200 / 204 | ☐ |
+| 7 | `operador01` en incógnito: crea y cambia estado, **no** ve Eliminar | UI según rol | ☐ |
+| 8 | `cliente01` en incógnito: solo lista/detalle, sin botones | UI según rol | ☐ |
+| 9 | curl con token de `cliente01`: `GET $GW/api/orders` → 200; `DELETE $GW/api/orders/1` → **403** | 403 del **BFF** (pasó el Gateway) | ☐ |
+| 10 | curl con token de `operador01`: `DELETE` → 403; `GET` → 200 | 403 / 200 | ☐ |
+| 11 | curl con token de `tomas`: `GET` → 200 | 200 | ☐ |
+| 12 | (Opcional) Swagger de orders no es alcanzable desde afuera (`http://98.89.96.254:8081` no responde) | timeout | ☐ |
+
+Para la defensa, mostrar en la consola: EC2 `ec2-apps` corriendo, SG, API Gateway (rutas, autorizador JWT con issuer/audience, CORS) y en Entra ID el tenant con los 3 usuarios y sus roles.
+
+### Lo que falta por hacer
+
+1. [ ] Correr las pruebas 4–12 de arriba y guardar capturas.
+2. [ ] **Subir a GitHub** los commits locales (backend: CLAUDE.md; front: `46563c5` acciones según rol). La EC2 no los necesita (el código del backend no cambió), pero conviene dejar los repos al día.
+3. [ ] (Opcional) **Java 21**: el caso pide Java 21 (hoy 17). Instalar JDK 21, subir `java.version` en ambos `pom.xml` y la imagen base de los Dockerfile; luego `git pull` + rebuild en la EC2.
+4. [ ] (Opcional) **Front en la nube**: la rúbrica dice "despliega backend y frontend en la nube". Hoy el front corre local. Opción simple: `npm run build` y servir `dist/` (S3 static website o un contenedor nginx en la misma EC2). Si cambia el origen: agregar la URL en spa-cloud > Autenticación (redirect URIs `.../` y `.../redirect.html`), en el CORS del API Gateway y en `CORS_ALLOWED_ORIGINS`.
+5. [ ] (Opcional) Base de datos "cloud": hoy Postgres corre en Docker dentro de la EC2 (ya está en la nube). Si el profe exige servicio gestionado, mover a RDS.
+6. [ ] (Opcional) Migrar el front a TypeScript como el tutorial.
+
+
+**Modo 100 % local** (sin AWS): cambiar `VITE_API_BASE_URL=http://localhost:8080` en `.env.local`. Para levantar de nuevo: iniciar Docker Desktop, `docker compose -f infra/apps/compose.yml up -d --build` y `npm run dev` en el front. Los archivos de entorno (`infra/apps/.env` y `talleres360-frontend/.env.local`) ya están escritos en el disco local; **no están en git**, así que en otra máquina (o en la EC2) hay que recrearlos a partir de `infra/apps/.env.example`.
 
 ## Comandos útiles
 
