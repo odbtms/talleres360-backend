@@ -142,7 +142,16 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
 5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). Falta el 403 en vivo (necesita un usuario con otro rol).
 6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
-7. [ ] **Parte 2 — AWS** (lo que sigue). Todo lo de Azure ya está listo y probado, así que esto es puro despliegue:
+7. [~] **AWS desplegado (Learner Lab, us-east-1)**, creado con AWS CLI (credenciales del lab en `~/.aws/credentials [default]`, caducan al reiniciar el lab):
+   - EC2 `ec2-apps` `i-052299a94765b3fa1` (AL2023, t3.medium, 20 GB, key `vockey`), **Elastic IP `98.89.96.254`**. SSH: `ssh -i ~/.ssh/labsuser.pem ec2-user@98.89.96.254`. Repo en `~/talleres360-backend`, `.env` copiado por scp. User-data instala docker, compose, buildx y git.
+   - SG `talleres360-apps` `sg-02b2b5b02009eebf6`: 22 solo desde la IP de casa (si cambia la red, actualizar la regla), 8080 abierto.
+   - API Gateway HTTP API `talleres360-api` (`sapz07gi18`): **`https://sapz07gi18.execute-api.us-east-1.amazonaws.com`**. Autorizador JWT `entra-jwt` (issuer del tenant v2.0, audiences `API_CLIENT_ID` y `api://API_CLIENT_ID`, scope `access_as_user`). Rutas: `ANY /api/{proxy+}` (JWT) y `OPTIONS /api/{proxy+}` (sin auth, ambas → `http://98.89.96.254:8080/api/{proxy}`). CORS `http://localhost:5173`. Stage `$default` auto-deploy.
+   - Gotcha: sin la ruta OPTIONS sin auth, el preflight CORS da 401 (la ruta ANY con JWT atrapa OPTIONS). Una ruta OPTIONS **sin target** tampoco sirve; tiene que ir a la integración.
+   - Gotcha Git Bash: usar `MSYS_NO_PATHCONV=1` con el CLI (convierte `/aws/...` y `$default`); los SG no pueden llamarse `sg-*`.
+   - Front local: `VITE_API_BASE_URL` = URL del Gateway.
+   - Actualizar la EC2: `ssh ... 'cd talleres360-backend && git pull && docker compose -f infra/apps/compose.yml up -d --build'`.
+
+   Plan original de este paso:
    - **EC2**: `git clone` del repo backend, crear a mano `infra/apps/.env` (no viaja en git: lleva `ENTRA_TENANT_ID`, `API_CLIENT_ID`, credenciales de la base y `CORS_ALLOWED_ORIGINS`), luego `docker compose -f infra/apps/compose.yml up -d --build`. El compose ya deja solo el BFF expuesto (8080).
    - **API Gateway (HTTP API)**: autorizador **JWT** con `Issuer = https://login.microsoftonline.com/73b420e9-.../v2.0` (el tenant) y `Audience = API_CLIENT_ID`; ruta `ANY /api/orders/{proxy+}` con integración HTTP hacia `http://<IP-EC2>:8080/api/orders/{proxy+}`; CORS con el origen del front. Después se agregan catalog y report igual.
    - **Security Group**: entrada 8080 (la integración HTTP de API Gateway sale por IPs públicas de AWS, no hay rango fijo; si se quiere cerrar de verdad, la alternativa es VPC Link con un ALB interno) y 22 solo desde tu IP. Postgres y orders no necesitan ninguna regla: viven en la red de Docker.
@@ -151,6 +160,11 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 8. [—] **Fuera del alcance de esta entrega** (ver "Alcance real"). Resto del caso: ms-catalog (stock decrece al aceptar), ms-report (Kafka), ms-notify (RabbitMQ), ms-audit (Kafka); `infra/mq` (RabbitMQ 2 nodos, 3 colas + DLQ, exchanges direct/topic/dlx, micro administrador) e `infra/kafka` (3 ZK + 3 brokers, tópicos `orders.events` y `audit.timeline` con 3 particiones/3 réplicas, Kafka-UI, micro administrador).
 
 ## Cómo retomar
+
+**Estado al 2026-09-22:** AWS construido (EC2 + API Gateway), pruebas sin token OK (401 en Gateway y BFF, preflight 200). **Falta la prueba end-to-end con login real** vía Gateway (Admin crea/acepta orden; cliente01 sin botones; 403 con curl contra el Gateway). EC2 quedó **detenida** (`aws ec2 stop-instances`), compose local abajo, dev server detenido.
+
+Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-052299a94765b3fa1` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 del SG para poder entrar por SSH.
+
 
 Todo quedó funcionando y **apagado** (compose abajo, dev server detenido). Para levantar de nuevo: iniciar Docker Desktop, `docker compose -f infra/apps/compose.yml up -d --build` y `npm run dev` en el front. Los archivos de entorno (`infra/apps/.env` y `talleres360-frontend/.env.local`) ya están escritos en el disco local; **no están en git**, así que en otra máquina (o en la EC2) hay que recrearlos a partir de `infra/apps/.env.example`.
 
