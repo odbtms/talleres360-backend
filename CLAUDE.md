@@ -161,7 +161,9 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 
 ## Cómo retomar
 
-**Estado al 2026-09-22:** AWS construido (EC2 + API Gateway), pruebas sin token OK (401 en Gateway y BFF, preflight 200). **Falta la prueba end-to-end con login real** vía Gateway (Admin crea/acepta orden; cliente01 sin botones; 403 con curl contra el Gateway). EC2 quedó **detenida** (`aws ec2 stop-instances`), compose local abajo, dev server detenido.
+**Estado al 2026-09-23:** end-to-end con login real vía Gateway OK: los 3 roles funcionan en el front y curl con `cliente01` da GET 200 / DELETE 403 (del BFF). La Postgres de la EC2 es distinta de la local (arrancó vacía). IP de casa actual en la regla 22: `179.56.215.178`. El usuario decidió **dejar el front local** para la evaluación (front en la nube descartado).
+
+Tip curl en PowerShell: copiar comandos del chat pisa el portapapeles. Definir primero `function Tok { $script:TOKEN = [regex]::Match((Get-Clipboard -Raw), 'eyJ[\w-]+\.[\w-]+\.[\w-]+').Value; $TOKEN.Split('.').Count }`, luego copiar el `Authorization` desde F12 > Network > `orders` y escribir `Tok` a mano (debe dar 3).
 
 Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-052299a94765b3fa1` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 del SG para poder entrar por SSH.
 
@@ -174,12 +176,12 @@ Gateway: `GW=https://sapz07gi18.execute-api.us-east-1.amazonaws.com`. Token: F12
 | 1 | `curl.exe -i $GW/api/orders` sin token | 401 del **Gateway** | ✔ |
 | 2 | Token basura contra el Gateway | 401 `invalid_token` (no llega al BFF) | ✔ |
 | 3 | Preflight OPTIONS desde `localhost:5173` | 200 con `access-control-allow-origin` | ✔ |
-| 4 | Login `tomas` (Admin) en el front → lista carga desde AWS | 200, se ven órdenes | ☐ |
+| 4 | Login `tomas` (Admin) en el front → lista carga desde AWS | 200, se ven órdenes | ✔ |
 | 5 | Admin: crear orden, aceptar, pasar por estados hasta ENTREGADA | 201 / 200; entregar sin aceptar → 409 | ☐ |
 | 6 | Admin: editar (solo RECIBIDA) y eliminar | 200 / 204 | ☐ |
-| 7 | `operador01` en incógnito: crea y cambia estado, **no** ve Eliminar | UI según rol | ☐ |
-| 8 | `cliente01` en incógnito: solo lista/detalle, sin botones | UI según rol | ☐ |
-| 9 | curl con token de `cliente01`: `GET $GW/api/orders` → 200; `DELETE $GW/api/orders/1` → **403** | 403 del **BFF** (pasó el Gateway) | ☐ |
+| 7 | `operador01` en incógnito: crea y cambia estado, **no** ve Eliminar | UI según rol | ✔ |
+| 8 | `cliente01` en incógnito: solo lista/detalle, sin botones | UI según rol | ✔ |
+| 9 | curl con token de `cliente01`: `GET $GW/api/orders` → 200; `DELETE $GW/api/orders/1` → **403** | 403 del **BFF** (pasó el Gateway) | ✔ |
 | 10 | curl con token de `operador01`: `DELETE` → 403; `GET` → 200 | 403 / 200 | ☐ |
 | 11 | curl con token de `tomas`: `GET` → 200 | 200 | ☐ |
 | 12 | (Opcional) Swagger de orders no es alcanzable desde afuera (`http://98.89.96.254:8081` no responde) | timeout | ☐ |
@@ -191,7 +193,7 @@ Para la defensa, mostrar en la consola: EC2 `ec2-apps` corriendo, SG, API Gatewa
 1. [ ] Correr las pruebas 4–12 de arriba y guardar capturas.
 2. [ ] **Subir a GitHub** los commits locales (backend: CLAUDE.md; front: `46563c5` acciones según rol). La EC2 no los necesita (el código del backend no cambió), pero conviene dejar los repos al día.
 3. [ ] (Opcional) **Java 21**: el caso pide Java 21 (hoy 17). Instalar JDK 21, subir `java.version` en ambos `pom.xml` y la imagen base de los Dockerfile; luego `git pull` + rebuild en la EC2.
-4. [ ] (Opcional) **Front en la nube**: la rúbrica dice "despliega backend y frontend en la nube". Hoy el front corre local. Opción simple: `npm run build` y servir `dist/` (S3 static website o un contenedor nginx en la misma EC2). Si cambia el origen: agregar la URL en spa-cloud > Autenticación (redirect URIs `.../` y `.../redirect.html`), en el CORS del API Gateway y en `CORS_ALLOWED_ORIGINS`.
+4. [—] (Descartado por el usuario) **Front en la nube**. Ojo si se retoma: fuera de localhost Entra exige redirect URI **https** y MSAL no funciona en http (opción: Caddy + `<ip>.sslip.io`). La rúbrica dice "despliega backend y frontend en la nube". Hoy el front corre local. Opción simple: `npm run build` y servir `dist/` (S3 static website o un contenedor nginx en la misma EC2). Si cambia el origen: agregar la URL en spa-cloud > Autenticación (redirect URIs `.../` y `.../redirect.html`), en el CORS del API Gateway y en `CORS_ALLOWED_ORIGINS`.
 5. [ ] (Opcional) Base de datos "cloud": hoy Postgres corre en Docker dentro de la EC2 (ya está en la nube). Si el profe exige servicio gestionado, mover a RDS.
 6. [ ] (Opcional) Migrar el front a TypeScript como el tutorial.
 
