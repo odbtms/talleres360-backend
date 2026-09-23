@@ -1,4 +1,4 @@
-# Microservicios Talleres360 (VM ec2-apps)
+# Talleres360 todo junto (desarrollo local). En AWS se usa infra/ms (ec2-apps) + infra/bff (ec2-bff).
 # Uso: docker compose -f infra/apps/compose.yml up -d --build
 # Variables (infra/apps/.env): DB_USERNAME, DB_PASSWORD, ENTRA_TENANT_ID, API_CLIENT_ID
 #
