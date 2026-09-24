@@ -23,6 +23,16 @@ public class GlobalExceptionHandler {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
 	}
 
+	@ExceptionHandler(AppointmentUnavailableException.class)
+	public ProblemDetail handleUnavailable(AppointmentUnavailableException ex) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ProblemDetail handleBusinessValidation(IllegalArgumentException ex) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+	}
+
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
 		String detail = ex.getBindingResult().getFieldErrors().stream()

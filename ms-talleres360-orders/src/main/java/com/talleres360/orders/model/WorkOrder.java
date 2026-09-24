@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,11 +31,28 @@ public class WorkOrder {
 	@Column(nullable = false, length = 150)
 	private String customerEmail;
 
+	@Column(length = 12)
+	private String customerRut;
+
+	@Column(length = 8)
+	private String customerPhone;
+
 	@Column(nullable = false, length = 10)
 	private String vehiclePlate;
 
 	@Column(length = 120)
 	private String vehicleModel;
+
+	private Integer vehicleYear;
+
+	@Enumerated(EnumType.STRING)
+	@Column(length = 30)
+	private ServiceType serviceType;
+
+	@Column(length = 30)
+	private String regionId;
+
+	private LocalDate appointmentDate;
 
 	@Column(length = 1000)
 	private String description;
