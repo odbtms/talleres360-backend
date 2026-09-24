@@ -57,6 +57,18 @@ public class WorkOrder {
 	@Column(length = 1000)
 	private String description;
 
+	@Column(length = 2000)
+	private String diagnosis;
+
+	@Column(length = 2000)
+	private String workPerformed;
+
+	@Column(precision = 12, scale = 2)
+	private BigDecimal laborCost = BigDecimal.ZERO;
+
+	private java.time.LocalDate estimatedDeliveryDate;
+	private LocalDateTime technicalUpdatedAt;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 30)
 	private OrderStatus status;
@@ -96,6 +108,7 @@ public class WorkOrder {
 		});
 		total = items.stream()
 				.map(OrderItem::subtotal)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
+				.reduce(BigDecimal.ZERO, BigDecimal::add)
+				.add(laborCost == null ? BigDecimal.ZERO : laborCost);
 	}
 }

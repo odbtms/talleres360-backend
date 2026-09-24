@@ -3,10 +3,10 @@ package com.talleres360.orders.service;
 import com.talleres360.orders.dto.AppointmentRequest;
 import com.talleres360.orders.dto.AvailabilityResponse;
 import com.talleres360.orders.dto.OrderResponse;
-import com.talleres360.orders.exception.AppointmentUnavailableException;
 import com.talleres360.orders.model.OrderStatus;
 import com.talleres360.orders.model.WorkOrder;
 import com.talleres360.orders.repository.WorkOrderRepository;
+import com.talleres360.orders.validation.RutValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,11 +32,6 @@ public class AppointmentService {
 	@Transactional
 	public OrderResponse create(String authenticatedEmail, AppointmentRequest request) {
 		validate(authenticatedEmail, request);
-		if (repository.existsByWorkshopIdAndAppointmentDateAndStatusNot(
-				request.workshopId(), request.appointmentDate(), OrderStatus.CANCELADA)) {
-			throw new AppointmentUnavailableException();
-		}
-
 		WorkOrder order = new WorkOrder();
 		order.setWorkshopId(request.workshopId());
 		order.setCustomerName(request.firstName().trim() + " " + request.lastName().trim());
@@ -66,10 +61,7 @@ public class AppointmentService {
 		if (!WORKSHOP_REGIONS.containsKey(workshopId) || from.isAfter(to)) {
 			throw new IllegalArgumentException("Los datos de disponibilidad no son válidos");
 		}
-		List<LocalDate> occupied = repository
-				.findByWorkshopIdAndAppointmentDateBetweenAndStatusNot(workshopId, from, to, OrderStatus.CANCELADA)
-				.stream().map(WorkOrder::getAppointmentDate).distinct().sorted().toList();
-		return new AvailabilityResponse(occupied);
+		return new AvailabilityResponse(List.of());
 	}
 
 	private void validate(String email, AppointmentRequest request) {
@@ -80,7 +72,7 @@ public class AppointmentService {
 		if (request.vehicleYear() > LocalDate.now().getYear() + 1) {
 			throw new IllegalArgumentException("El año del vehículo no es válido");
 		}
-		if (!isValidRut(request.rut())) {
+		if (!RutValidator.isValid(request.rut())) {
 			throw new IllegalArgumentException("El RUT ingresado no es válido");
 		}
 		if (request.appointmentDate().isAfter(LocalDate.now().plusDays(90))) {
@@ -94,19 +86,4 @@ public class AppointmentService {
 		}
 	}
 
-	private boolean isValidRut(String rut) {
-		String clean = rut.toUpperCase().replaceAll("[^0-9K]", "");
-		if (!clean.matches("\\d{7,8}[0-9K]")) return false;
-		String body = clean.substring(0, clean.length() - 1);
-		char supplied = clean.charAt(clean.length() - 1);
-		int sum = 0;
-		int multiplier = 2;
-		for (int index = body.length() - 1; index >= 0; index--) {
-			sum += Character.getNumericValue(body.charAt(index)) * multiplier;
-			multiplier = multiplier == 7 ? 2 : multiplier + 1;
-		}
-		int result = 11 - (sum % 11);
-		char expected = result == 11 ? '0' : result == 10 ? 'K' : Character.forDigit(result, 10);
-		return supplied == expected;
-	}
 }

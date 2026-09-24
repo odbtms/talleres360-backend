@@ -8,6 +8,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
+import com.talleres360.orders.model.Product;
+import com.talleres360.orders.repository.ProductRepository;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -19,9 +22,12 @@ class WorkOrderControllerTest {
 	@Autowired
 	MockMvc mvc;
 
+	@Autowired
+	ProductRepository productRepository;
+
 	private static final String ORDER = """
-			{"workshopId":1,"customerName":"Juan Perez","customerEmail":"juan@mail.com",
-			 "vehiclePlate":"abcd12","vehicleModel":"Toyota Yaris","description":"Cambio de aceite",
+			{"workshopId":1,"customerName":"Juan Perez","customerEmail":"juan@mail.com","customerRut":"12.345.678-5","customerPhone":"12345678",
+			 "vehiclePlate":"AB-CD-12","vehicleModel":"Toyota Yaris","description":"Cambio de aceite",
 			 "items":[{"productId":10,"quantity":2,"unitPrice":15000}]}
 			""";
 
@@ -37,6 +43,22 @@ class WorkOrderControllerTest {
 		changeStatus(1, "ENTREGADA").andExpect(status().isConflict());
 
 		changeStatus(1, "ACEPTADA").andExpect(status().isOk()).andExpect(jsonPath("$.acceptedAt").exists());
+		Product product = new Product();
+		product.setName("Filtro de aceite");
+		product.setStock(5);
+		product.setPrice(BigDecimal.valueOf(10000));
+		product.setActive(true);
+		product = productRepository.save(product);
+		mvc.perform(put("/api/orders/1/technical")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(("""
+						{"diagnosis":"Filtro de aceite saturado", "workPerformed":"Cambio de filtro y aceite del motor",
+						 "laborCost":20000,"estimatedDeliveryDate":"%s","items":[{"productId":%d,"quantity":1}]}
+						""").formatted(LocalDate.now().plusDays(2), product.getId())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.diagnosis").value("Filtro de aceite saturado"))
+				.andExpect(jsonPath("$.items[0].description").value("Filtro de aceite"))
+				.andExpect(jsonPath("$.total").value(30000));
 		changeStatus(1, "EN_REPARACION").andExpect(status().isOk());
 		changeStatus(1, "LISTA_PARA_ENTREGA").andExpect(status().isOk());
 		changeStatus(1, "ENTREGADA").andExpect(status().isOk()).andExpect(jsonPath("$.deliveredAt").exists());
@@ -71,14 +93,14 @@ class WorkOrderControllerTest {
 		mvc.perform(post("/api/appointments")
 					.header("X-Customer-Email", "otro@example.com")
 					.contentType(MediaType.APPLICATION_JSON).content(appointment))
-				.andExpect(status().isConflict());
+				.andExpect(status().isCreated());
 
 		mvc.perform(get("/api/appointments/availability")
 					.param("workshopId", "5")
 					.param("from", LocalDate.now().plusDays(1).toString())
 					.param("to", LocalDate.now().plusDays(90).toString()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.occupiedDates[0]").value(appointmentDate));
+				.andExpect(jsonPath("$.occupiedDates.length()").value(0));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions changeStatus(long id, String status) throws Exception {

@@ -23,6 +23,11 @@ public record OrderResponse(
 		String regionId,
 		LocalDate appointmentDate,
 		String description,
+		String diagnosis,
+		String workPerformed,
+		BigDecimal laborCost,
+		LocalDate estimatedDeliveryDate,
+		LocalDateTime technicalUpdatedAt,
 		OrderStatus status,
 		BigDecimal total,
 		List<Item> items,
@@ -31,9 +36,9 @@ public record OrderResponse(
 		LocalDateTime acceptedAt,
 		LocalDateTime deliveredAt
 ) {
-	public record Item(Long id, Long productId, Integer quantity, BigDecimal unitPrice, BigDecimal subtotal) {
+	public record Item(Long id, Long productId, String description, Integer quantity, BigDecimal unitPrice, BigDecimal subtotal) {
 		static Item from(OrderItem i) {
-			return new Item(i.getId(), i.getProductId(), i.getQuantity(), i.getUnitPrice(), i.subtotal());
+			return new Item(i.getId(), i.getProductId(), i.getDescription(), i.getQuantity(), i.getUnitPrice(), i.subtotal());
 		}
 	}
 
@@ -42,7 +47,9 @@ public record OrderResponse(
 				o.getId(), o.getWorkshopId(), o.getCustomerName(), o.getCustomerEmail(),
 				o.getCustomerRut(), o.getCustomerPhone(), o.getVehiclePlate(), o.getVehicleModel(),
 				o.getVehicleYear(), o.getServiceType(), o.getRegionId(), o.getAppointmentDate(),
-				o.getDescription(), o.getStatus(), o.getTotal(),
+				o.getDescription(), o.getDiagnosis(), o.getWorkPerformed(), o.getLaborCost(),
+				o.getEstimatedDeliveryDate(), o.getTechnicalUpdatedAt(),
+				o.getStatus(), o.getTotal(),
 				o.getItems().stream().map(Item::from).toList(),
 				o.getCreatedAt(), o.getUpdatedAt(), o.getAcceptedAt(), o.getDeliveredAt());
 	}

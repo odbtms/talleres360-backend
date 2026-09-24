@@ -2,12 +2,15 @@ package com.talleres360.orders.service;
 
 import com.talleres360.orders.dto.OrderRequest;
 import com.talleres360.orders.dto.OrderResponse;
+import com.talleres360.orders.dto.TechnicalUpdateRequest;
 import com.talleres360.orders.exception.InvalidStatusTransitionException;
 import com.talleres360.orders.exception.OrderNotFoundException;
 import com.talleres360.orders.model.OrderItem;
 import com.talleres360.orders.model.OrderStatus;
 import com.talleres360.orders.model.WorkOrder;
 import com.talleres360.orders.repository.WorkOrderRepository;
+import com.talleres360.orders.repository.ProductRepository;
+import com.talleres360.orders.validation.RutValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import java.util.List;
 public class WorkOrderService {
 
 	private final WorkOrderRepository repository;
+	private final ProductRepository productRepository;
 
 	@Transactional
 	public OrderResponse create(OrderRequest request) {
@@ -63,6 +67,12 @@ public class WorkOrderService {
 					"No se puede pasar de " + current + " a " + newStatus
 							+ ". Permitidos: " + current.allowedTransitions());
 		}
+		if (newStatus == OrderStatus.LISTA_PARA_ENTREGA
+				&& (order.getDiagnosis() == null || order.getDiagnosis().isBlank()
+				|| order.getWorkPerformed() == null || order.getWorkPerformed().isBlank())) {
+			throw new InvalidStatusTransitionException(
+					"Debes registrar el diagnóstico y el trabajo realizado antes de marcar la orden como lista");
+		}
 
 		order.setStatus(newStatus);
 		LocalDateTime now = LocalDateTime.now();
@@ -78,6 +88,36 @@ public class WorkOrderService {
 	}
 
 	@Transactional
+	public OrderResponse updateTechnicalDetails(Long id, TechnicalUpdateRequest request) {
+		WorkOrder order = get(id);
+		if (order.getStatus() != OrderStatus.ACEPTADA && order.getStatus() != OrderStatus.EN_REPARACION
+				&& order.getStatus() != OrderStatus.LISTA_PARA_ENTREGA) {
+			throw new InvalidStatusTransitionException(
+					"Primero se debe aceptar la solicitud para registrar el diagnóstico y los costos");
+		}
+
+		order.setDiagnosis(request.diagnosis().trim());
+		order.setWorkPerformed(request.workPerformed().trim());
+		order.setLaborCost(request.laborCost());
+		order.setEstimatedDeliveryDate(request.estimatedDeliveryDate());
+		order.setTechnicalUpdatedAt(LocalDateTime.now());
+		order.replaceItems(request.items().stream().map(i -> {
+			var product = productRepository.findById(i.productId())
+					.orElseThrow(() -> new IllegalArgumentException("El producto seleccionado no existe"));
+			if (!product.isActive() || product.getStock() < i.quantity()) {
+				throw new IllegalArgumentException("El producto " + product.getName() + " no tiene stock suficiente");
+			}
+			OrderItem item = new OrderItem();
+			item.setProductId(product.getId());
+			item.setDescription(product.getName());
+			item.setQuantity(i.quantity());
+			item.setUnitPrice(product.getPrice());
+			return item;
+		}).toList());
+		return OrderResponse.from(repository.save(order));
+	}
+
+	@Transactional
 	public void delete(Long id) {
 		repository.delete(get(id));
 	}
@@ -87,9 +127,14 @@ public class WorkOrderService {
 	}
 
 	private void apply(WorkOrder order, OrderRequest request) {
+		if (!RutValidator.isValid(request.customerRut())) {
+			throw new IllegalArgumentException("El RUT ingresado no es válido");
+		}
 		order.setWorkshopId(request.workshopId());
 		order.setCustomerName(request.customerName());
 		order.setCustomerEmail(request.customerEmail());
+		order.setCustomerRut(request.customerRut());
+		order.setCustomerPhone(request.customerPhone());
 		order.setVehiclePlate(request.vehiclePlate().toUpperCase());
 		order.setVehicleModel(request.vehicleModel());
 		order.setDescription(request.description());
@@ -98,6 +143,7 @@ public class WorkOrderService {
 		order.replaceItems(items.stream().map(i -> {
 			OrderItem item = new OrderItem();
 			item.setProductId(i.productId());
+			item.setDescription("Producto #" + i.productId());
 			item.setQuantity(i.quantity());
 			item.setUnitPrice(i.unitPrice());
 			return item;

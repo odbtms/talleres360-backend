@@ -3,6 +3,7 @@ package com.talleres360.orders.controller;
 import com.talleres360.orders.dto.OrderRequest;
 import com.talleres360.orders.dto.OrderResponse;
 import com.talleres360.orders.dto.StatusUpdateRequest;
+import com.talleres360.orders.dto.TechnicalUpdateRequest;
 import com.talleres360.orders.model.OrderStatus;
 import com.talleres360.orders.service.WorkOrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,6 +57,13 @@ public class WorkOrderController {
 	@Operation(summary = "Cambiar estado: RECIBIDA|ACEPTADA|EN_REPARACION|LISTA_PARA_ENTREGA|ENTREGADA|CANCELADA")
 	public OrderResponse changeStatus(@PathVariable Long id, @Valid @RequestBody StatusUpdateRequest request) {
 		return service.changeStatus(id, request.status());
+	}
+
+	@PutMapping("/{id}/technical")
+	@Operation(summary = "Registrar diagnóstico, trabajo realizado, mano de obra y repuestos")
+	public OrderResponse updateTechnicalDetails(
+			@PathVariable Long id, @Valid @RequestBody TechnicalUpdateRequest request) {
+		return service.updateTechnicalDetails(id, request);
 	}
 
 	@DeleteMapping("/{id}")
