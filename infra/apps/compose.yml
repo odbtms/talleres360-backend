@@ -1,9 +1,9 @@
 # Talleres360 todo junto (desarrollo local). El BFF se construye desde el repo hermano ../talleres360-bff.
 # En AWS: infra/ms en ec2-apps y el repo talleres360-bff en ec2-bff.
 # Uso: docker compose -f infra/apps/compose.yml up -d --build
-# Variables (infra/apps/.env): DB_USERNAME, DB_PASSWORD, ENTRA_TENANT_ID, API_CLIENT_ID
+# Variables (infra/apps/.env): DB_USERNAME, DB_PASSWORD, ENTRA_TENANT_ID, API_CLIENT_ID, INTERNAL_API_KEY
 #
-# Solo el BFF se publica hacia afuera. Postgres y los microservicios quedan en la red
+# Solo el BFF se publica hacia afuera. Los tres PostgreSQL y microservicios quedan en la red
 # interna "talleres360": se hablan por nombre de servicio y no son alcanzables desde internet.
 
 services:
@@ -42,6 +42,9 @@ services:
       DB_USERNAME: ${DB_USERNAME:-talleres360}
       DB_PASSWORD: ${DB_PASSWORD:-talleres360}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      CATALOG_URL: http://catalog:8082
+      REPORT_URL: http://report:8083
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +64,9 @@ services:
       ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
       API_CLIENT_ID: ${API_CLIENT_ID}
       ORDERS_URL: http://orders:8081
+      CATALOG_URL: http://catalog:8082
+      REPORT_URL: http://report:8083
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       # DEBUG para diagnosticar 401/403 (ver las authorities del token)
       LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: ${SECURITY_LOG_LEVEL:-INFO}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
@@ -70,8 +76,67 @@ services:
     networks:
       - talleres360
 
+  catalog-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: catalog_db
+      POSTGRES_USER: ${DB_USERNAME:-talleres360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
+    volumes: [catalog_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [talleres360]
+  catalog:
+    build: ../../ms-talleres360-catalog
+    image: talleres360/ms-catalog:latest
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_URL: jdbc:postgresql://catalog-db:5432/catalog_db
+      DB_USERNAME: ${DB_USERNAME:-talleres360}
+      DB_PASSWORD: ${DB_PASSWORD:-talleres360}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [talleres360]
+  report-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: report_db
+      POSTGRES_USER: ${DB_USERNAME:-talleres360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
+    volumes: [report_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [talleres360]
+  report:
+    build: ../../ms-talleres360-report
+    image: talleres360/ms-report:latest
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_URL: jdbc:postgresql://report-db:5432/report_db
+      DB_USERNAME: ${DB_USERNAME:-talleres360}
+      DB_PASSWORD: ${DB_PASSWORD:-talleres360}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      report-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [talleres360]
+
 volumes:
   pgdata:
+  catalog_pgdata:
+  report_pgdata:
 
 networks:
   talleres360:

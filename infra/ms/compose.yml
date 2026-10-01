@@ -1,10 +1,10 @@
-# Microservicios Talleres360 (VM ec2-apps)
+# Microservicios Talleres360 (VM ec2-apps): orders, catalog y report.
 # Uso: docker compose -f infra/ms/compose.yml up -d --build
-# Variables (infra/ms/.env): DB_USERNAME, DB_PASSWORD, CORS_ALLOWED_ORIGINS
+# Variables (infra/ms/.env): DB_USERNAME, DB_PASSWORD, CORS_ALLOWED_ORIGINS, INTERNAL_API_KEY
 #
-# El BFF (repo talleres360-bff) corre en otra VM (ec2-bff) y llama a orders por la IP privada de esta VM (puerto 8081).
-# El security group de ec2-apps solo deja entrar al 8081 desde el security group del BFF.
-# Postgres no publica puertos: solo lo ve orders por la red interna.
+# El BFF (repo talleres360-bff) corre en otra VM y llama a 8081–8083 por la IP privada.
+# El security group permite esos puertos solo desde el security group del BFF.
+# Cada micro tiene su PostgreSQL privado; ninguno publica 5432.
 
 services:
   postgres:
@@ -38,6 +38,9 @@ services:
       DB_USERNAME: ${DB_USERNAME:-talleres360}
       DB_PASSWORD: ${DB_PASSWORD:-talleres360}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      CATALOG_URL: http://catalog:8082
+      REPORT_URL: http://report:8083
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,9 +49,70 @@ services:
       - talleres360
 
 # Mismo nombre de volumen que infra/apps: conserva los datos que ya tenia la VM
+  catalog-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: catalog_db
+      POSTGRES_USER: ${DB_USERNAME:-talleres360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
+    volumes: [catalog_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [talleres360]
+  catalog:
+    build: ../../ms-talleres360-catalog
+    image: talleres360/ms-catalog:latest
+    ports: ["8082:8082"]
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_URL: jdbc:postgresql://catalog-db:5432/catalog_db
+      DB_USERNAME: ${DB_USERNAME:-talleres360}
+      DB_PASSWORD: ${DB_PASSWORD:-talleres360}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [talleres360]
+  report-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: report_db
+      POSTGRES_USER: ${DB_USERNAME:-talleres360}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-talleres360}
+    volumes: [report_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [talleres360]
+  report:
+    build: ../../ms-talleres360-report
+    image: talleres360/ms-report:latest
+    ports: ["8083:8083"]
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_URL: jdbc:postgresql://report-db:5432/report_db
+      DB_USERNAME: ${DB_USERNAME:-talleres360}
+      DB_PASSWORD: ${DB_PASSWORD:-talleres360}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    depends_on:
+      report-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [talleres360]
+
 volumes:
   pgdata:
     name: apps_pgdata
+  catalog_pgdata:
+  report_pgdata:
 
 networks:
   talleres360:

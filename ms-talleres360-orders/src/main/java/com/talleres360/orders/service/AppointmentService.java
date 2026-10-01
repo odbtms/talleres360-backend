@@ -28,6 +28,7 @@ public class AppointmentService {
 			Map.entry(18L, "araucania"), Map.entry(19L, "araucania"), Map.entry(20L, "araucania"));
 
 	private final WorkOrderRepository repository;
+	private final OrderEventService events;
 
 	@Transactional
 	public OrderResponse create(String authenticatedEmail, AppointmentRequest request) {
@@ -46,7 +47,9 @@ public class AppointmentService {
 		order.setAppointmentDate(request.appointmentDate());
 		order.setDescription(request.reason().trim());
 		order.setStatus(OrderStatus.RECIBIDA);
-		return OrderResponse.from(repository.save(order));
+		OrderResponse response = OrderResponse.from(repository.save(order));
+		events.record(order, "CREADA", authenticatedEmail);
+		return response;
 	}
 
 	@Transactional(readOnly = true)

@@ -28,8 +28,8 @@ public class WorkOrderController {
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	@Operation(summary = "Crear orden (queda en estado RECIBIDA)")
-	public OrderResponse create(@Valid @RequestBody OrderRequest request) {
-		return service.create(request);
+	public OrderResponse create(@Valid @RequestBody OrderRequest request, @RequestHeader(value = "X-Actor-Email", required = false) String actor) {
+		return service.create(request, actor);
 	}
 
 	@GetMapping("/{id}")
@@ -49,27 +49,29 @@ public class WorkOrderController {
 
 	@PutMapping("/{id}")
 	@Operation(summary = "Editar datos de la orden (solo en estado RECIBIDA)")
-	public OrderResponse update(@PathVariable Long id, @Valid @RequestBody OrderRequest request) {
-		return service.update(id, request);
+	public OrderResponse update(@PathVariable Long id, @Valid @RequestBody OrderRequest request, @RequestHeader(value = "X-Actor-Email", required = false) String actor) {
+		return service.update(id, request, actor);
 	}
 
 	@PutMapping("/{id}/status")
 	@Operation(summary = "Cambiar estado: RECIBIDA|ACEPTADA|EN_REPARACION|LISTA_PARA_ENTREGA|ENTREGADA|CANCELADA")
-	public OrderResponse changeStatus(@PathVariable Long id, @Valid @RequestBody StatusUpdateRequest request) {
-		return service.changeStatus(id, request.status());
+	public OrderResponse changeStatus(@PathVariable Long id, @Valid @RequestBody StatusUpdateRequest request,
+			@RequestHeader(value = "X-Actor-Email", required = false) String actor,
+			@RequestHeader(value = "X-Actor-Role", required = false) String actorRole) {
+		return service.changeStatus(id, request.status(), actor, actorRole, request.reason());
 	}
 
 	@PutMapping("/{id}/technical")
 	@Operation(summary = "Registrar diagnóstico, trabajo realizado, mano de obra y repuestos")
 	public OrderResponse updateTechnicalDetails(
-			@PathVariable Long id, @Valid @RequestBody TechnicalUpdateRequest request) {
-		return service.updateTechnicalDetails(id, request);
+			@PathVariable Long id, @Valid @RequestBody TechnicalUpdateRequest request, @RequestHeader(value = "X-Actor-Email", required = false) String actor) {
+		return service.updateTechnicalDetails(id, request, actor);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@Operation(summary = "Eliminar orden")
-	public void delete(@PathVariable Long id) {
-		service.delete(id);
+	public void delete(@PathVariable Long id, @RequestHeader(value = "X-Actor-Email", required = false) String actor) {
+		service.delete(id, actor);
 	}
 }

@@ -3,7 +3,6 @@ package com.talleres360.orders.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public record OrderRequest(
@@ -19,8 +18,7 @@ public record OrderRequest(
 ) {
 	public record Item(
 			@NotNull Long productId,
-			@NotNull @Positive Integer quantity,
-			@NotNull @PositiveOrZero BigDecimal unitPrice
+			@NotNull @Positive Integer quantity
 	) {
 	}
 }

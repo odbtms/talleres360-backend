@@ -9,8 +9,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.math.BigDecimal;
-import com.talleres360.orders.model.Product;
-import com.talleres360.orders.repository.ProductRepository;
+import com.talleres360.orders.service.CatalogClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import static org.mockito.Mockito.when;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -22,17 +23,19 @@ class WorkOrderControllerTest {
 	@Autowired
 	MockMvc mvc;
 
-	@Autowired
-	ProductRepository productRepository;
+	@MockitoBean
+	CatalogClient catalogClient;
 
 	private static final String ORDER = """
 			{"workshopId":1,"customerName":"Juan Perez","customerEmail":"juan@mail.com","customerRut":"12.345.678-5","customerPhone":"12345678",
 			 "vehiclePlate":"AB-CD-12","vehicleModel":"Toyota Yaris","description":"Cambio de aceite",
-			 "items":[{"productId":10,"quantity":2,"unitPrice":15000}]}
+			 "items":[{"productId":10,"quantity":2}]}
 			""";
 
 	@Test
 	void flujoCompletoYReglaNoEntregarSinAceptar() throws Exception {
+		when(catalogClient.product(10L)).thenReturn(new CatalogClient.Product(10L, "ACEITE", "Aceite", BigDecimal.valueOf(15000), 5, true, true));
+		when(catalogClient.product(1L)).thenReturn(new CatalogClient.Product(1L, "FILTRO", "Filtro de aceite", BigDecimal.valueOf(10000), 5, true, true));
 		mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(ORDER))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.id").value(1))
@@ -43,18 +46,12 @@ class WorkOrderControllerTest {
 		changeStatus(1, "ENTREGADA").andExpect(status().isConflict());
 
 		changeStatus(1, "ACEPTADA").andExpect(status().isOk()).andExpect(jsonPath("$.acceptedAt").exists());
-		Product product = new Product();
-		product.setName("Filtro de aceite");
-		product.setStock(5);
-		product.setPrice(BigDecimal.valueOf(10000));
-		product.setActive(true);
-		product = productRepository.save(product);
 		mvc.perform(put("/api/orders/1/technical")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(("""
 						{"diagnosis":"Filtro de aceite saturado", "workPerformed":"Cambio de filtro y aceite del motor",
 						 "laborCost":20000,"estimatedDeliveryDate":"%s","items":[{"productId":%d,"quantity":1}]}
-						""").formatted(LocalDate.now().plusDays(2), product.getId())))
+						""").formatted(LocalDate.now().plusDays(2), 1)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.diagnosis").value("Filtro de aceite saturado"))
 				.andExpect(jsonPath("$.items[0].description").value("Filtro de aceite"))
@@ -107,5 +104,13 @@ class WorkOrderControllerTest {
 		return mvc.perform(put("/api/orders/" + id + "/status")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"status\":\"" + status + "\"}"));
+	}
+
+	@Test
+	void dosLineasDelMismoRepuestoNoPuedenSuperarElStock() throws Exception {
+		when(catalogClient.product(10L)).thenReturn(new CatalogClient.Product(10L, "ACEITE", "Aceite", BigDecimal.valueOf(15000), 5, true, true));
+		String duplicated = ORDER.replace("\"quantity\":2", "\"quantity\":3},{\"productId\":10,\"quantity\":3");
+		mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(duplicated))
+				.andExpect(status().isBadRequest());
 	}
 }
