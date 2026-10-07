@@ -17,10 +17,12 @@ Evaluación Final Transversal DSY1107 (Desarrollo Cloud Native I). Caso "Tallere
 | `taller-360/taller-360/` (esta) | https://github.com/odbtms/talleres360-backend (público) | Microservicios + `infra/` |
 | `taller-360/talleres360-bff/` | https://github.com/odbtms/talleres360-bff (público) | BFF (se separó del backend el 2026-09-23 con `git subtree split`, conserva historial) |
 | `taller-360/talleres360-frontend/` | https://github.com/odbtms/talleres360-frontend (público) | SPA React |
+| `taller-360/talleres360-catalog/` | https://github.com/odbtms/talleres360-catalog (público) | ms-catalog (8082) de Emmanuel, copiado de `EmmanuelhxGG/ms-catalogo-talleres360` (rama `backend-emmanuel` → `main`) |
+| `taller-360/talleres360-report/` | https://github.com/odbtms/talleres360-report (público) | ms-report (8083) de Emmanuel, copiado de `EmmanuelhxGG/ms-reportes-talleres360` |
 
-Rama `main` en los tres, remoto `origin`. `gh` autenticado como `odbtms` (HTTPS).
+Rama `main` en todos, remoto `origin`. `gh` autenticado como `odbtms` (HTTPS). Los README de catalog/report todavía dicen `git pull origin backend-emmanuel`: en nuestros repos es `main`.
 
-Backend (microservicios) en monorepo: la EC2 hace `git clone` + `docker compose up` y el compose construye cada micro desde su carpeta. El BFF va en repo propio y en VM propia (resiliencia). `infra/apps/compose.yml` es solo para local y construye el BFF desde `../talleres360-bff`; en AWS se usa `infra/ms/compose.yml` (ec2-apps) y el `compose.yml` del repo BFF (ec2-bff).
+Orders sigue en este repo (`ms-talleres360-orders/`); BFF, catalog y report en repos propios. **Cada uno en su propia VM**. `infra/apps/compose.yml` es solo para local y construye el BFF desde `../talleres360-bff`; en AWS orders usa `infra/ms/compose.yml` y los demás el `compose.yml` de su repo.
 
 ## Lo que está hecho
 
@@ -143,17 +145,26 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 4. [ ] **JDK 25** instalado; subir `java.version` y la imagen del Dockerfile de orders.
 5. [x] **ms-talleres360-bff**: Resource Server (issuer-uri + audience), roles por endpoint, reenvío a ms-orders por la red interna (`http://orders:8081`), en el compose. **Hito H5 probado OK**: 401 sin token y 200 con token real (`Granted Authorities=[SCOPE_access_as_user, ROLE_Admin]`). 403 en vivo: la UI ya oculta acciones por rol; falta la evidencia con curl (ver "Pruebas pendientes").
 6. [x] Compose: solo el BFF expone puerto; orders y Postgres quedaron internos. (CORS sigue en los micros hasta que exista API Gateway.)
-7. [~] **AWS desplegado (Learner Lab, us-east-1)**, creado con AWS CLI (credenciales del lab en `~/.aws/credentials [default]`, caducan al reiniciar el lab):
-   - EC2 `ec2-apps` `i-052299a94765b3fa1` (AL2023, t3.medium, 20 GB, key `vockey`), **Elastic IP `98.89.96.254`**. SSH: `ssh -i ~/.ssh/labsuser.pem ec2-user@98.89.96.254`. Repo en `~/talleres360-backend`, `.env` copiado por scp. User-data instala docker, compose, buildx y git.
-     Desde 2026-09-23 solo corre `infra/ms/compose.yml` (postgres + orders, volumen `apps_pgdata`, `.env` en `infra/ms/.env`). IP privada **`172.31.18.205`**.
-   - EC2 `ec2-bff` `i-05f86c911b907db2a` (AL2023, t3.small, 20 GB, key `vockey`), **Elastic IP `184.195.27.2`**. Repo `~/talleres360-bff` con su `.env` (IDs de Entra + `ORDERS_URL=http://172.31.18.205:8081`). Actualizar: `ssh ... ec2-user@184.195.27.2 'cd talleres360-bff && git pull && docker compose up -d --build'`.
-   - SG `talleres360-apps` `sg-02b2b5b02009eebf6`: 22 solo desde la IP de casa (si cambia la red, actualizar la regla), **8081 solo desde el SG del BFF**. Sin 8080: ec2-apps no es alcanzable desde internet.
-   - SG `talleres360-bff` `sg-06c6fcefa26e3a29e`: 22 desde la IP de casa, 8080 abierto (destino del Gateway).
-   - API Gateway HTTP API `talleres360-api` (`sapz07gi18`): **`https://sapz07gi18.execute-api.us-east-1.amazonaws.com`**. Autorizador JWT `entra-jwt` (issuer del tenant v2.0, audiences `API_CLIENT_ID` y `api://API_CLIENT_ID`, scope `access_as_user`). Rutas: `ANY /api/{proxy+}` (JWT) y `OPTIONS /api/{proxy+}` (sin auth, ambas → integración `pisym76` = `http://184.195.27.2:8080/api/{proxy}`, el BFF). CORS `http://localhost:5173`. Stage `$default` auto-deploy.
+7. [~] **AWS desplegado (Learner Lab, us-east-1, cuenta `649334747349`)**. El 2026-10-07 se acabó el lab anterior y se recreó todo en uno nuevo con AWS CLI (credenciales del lab en `~/.aws/credentials [default]`, llave `~/.ssh/labsuser.pem`; ambas caducan/cambian con el lab). **Cada servicio en su propia EC2** (AL2023, t3.small, 20 GB gp3, key `vockey`, user-data instala docker, compose, buildx, git y 2 GB de swap):
+
+   | EC2 | Instancia | Elastic IP | IP privada | Repo (en `~/`) | `.env` | Puerto |
+   |---|---|---|---|---|---|---|
+   | `ec2-bff` | `i-0a518779b3ba0f5c6` | `34.202.46.77` | `172.31.42.77` | `talleres360-bff` | `.env` | 8080 (público) |
+   | `ec2-orders` | `i-012041b5cf34208ec` | `184.73.218.224` | `172.31.46.231` | `talleres360-backend` (`infra/ms/compose.yml`) | `infra/ms/.env` | 8081 |
+   | `ec2-catalog` | `i-0f86426497fc6d729` | `3.213.56.98` | `172.31.47.105` | `talleres360-catalog` | `.env` | 8082 |
+   | `ec2-report` | `i-0ea543f36ccbec2fb` | `3.216.5.151` | `172.31.46.51` | `talleres360-report` | `.env` | 8083 |
+
+   - Cada micro tiene su propio Postgres en su VM (sin puerto publicado). Las bases del lab nuevo arrancaron vacías.
+   - catalog y report (de Emmanuel, copiados a `odbtms/talleres360-catalog` y `odbtms/talleres360-report` con su historial) exigen la cabecera `X-Internal-Key`; la agrega el BFF con `INTERNAL_API_KEY` (misma clave en los 3 `.env`, generada al azar, solo en las EC2). Nuestro ms-orders **no** los llama: el stock no se descuenta y reportes queda vacío (decisión del usuario; la versión integrada es `EmmanuelhxGG/ms-ordenes-talleres360` + rama `bff-emmanuel`).
+   - BFF `.env`: IDs de Entra + `ORDERS_URL`/`CATALOG_URL`/`REPORT_URL` con las IP privadas + `INTERNAL_API_KEY`.
+   - SG `talleres360-bff` `sg-06f105cba9fe78bdb`: 22 desde la IP de casa, 8080 abierto (destino del Gateway).
+   - SG `talleres360-ms` `sg-0a254951951e7cee7` (orders, catalog, report): 22 desde la IP de casa, **8081-8083 solo desde el SG del BFF**. Verificado: desde internet no responden.
+   - API Gateway HTTP API `talleres360-api` (`qh4loqw8v1`): **`https://qh4loqw8v1.execute-api.us-east-1.amazonaws.com`**. Autorizador JWT `entra-jwt` (`kdar05`; issuer del tenant v2.0, audiences `API_CLIENT_ID` y `api://API_CLIENT_ID`, scope `access_as_user`). Rutas: `ANY /api/{proxy+}` (JWT) y `OPTIONS /api/{proxy+}` (sin auth), ambas → integración `jo5ja2p` = `http://34.202.46.77:8080/api/{proxy}` (el BFF). CORS `http://localhost:5173`. Stage `$default` auto-deploy.
+   - Rutas del BFF: `/api/orders/**` (como antes), `/api/products/**` (GET Admin/Operador, POST/PUT Admin), `/api/reports/**` (GET Admin). El front aún no tiene pantallas de catálogo ni reportes.
    - Gotcha: sin la ruta OPTIONS sin auth, el preflight CORS da 401 (la ruta ANY con JWT atrapa OPTIONS). Una ruta OPTIONS **sin target** tampoco sirve; tiene que ir a la integración.
    - Gotcha Git Bash: usar `MSYS_NO_PATHCONV=1` con el CLI (convierte `/aws/...` y `$default`); los SG no pueden llamarse `sg-*`.
-   - Front local: `VITE_API_BASE_URL` = URL del Gateway.
-   - Actualizar ec2-apps: `ssh ... 'cd talleres360-backend && git pull && docker compose -f infra/ms/compose.yml up -d --build'`.
+   - Front local: `VITE_API_BASE_URL` = URL del Gateway. Entra ID no cambia al rehacer AWS (solo si cambia el origen del front).
+   - Actualizar una VM: `ssh -i ~/.ssh/labsuser.pem ec2-user@<EIP> 'cd <repo> && git pull && docker compose up -d --build'` (orders: `docker compose -f infra/ms/compose.yml ...`).
 
    Plan original de este paso:
    - **EC2**: `git clone` del repo backend, crear a mano `infra/apps/.env` (no viaja en git: lleva `ENTRA_TENANT_ID`, `API_CLIENT_ID`, credenciales de la base y `CORS_ALLOWED_ORIGINS`), luego `docker compose -f infra/apps/compose.yml up -d --build`. El compose ya deja solo el BFF expuesto (8080).
@@ -165,22 +176,22 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 
 ## Cómo retomar
 
-**Estado al 2026-09-23:** end-to-end con login real vía Gateway OK: los 3 roles funcionan en el front y curl con `cliente01` da GET 200 / DELETE 403 (del BFF). La Postgres de la EC2 es distinta de la local (arrancó vacía). IP de casa actual en la regla 22: `179.56.215.178`. El usuario decidió **dejar el front local** para la evaluación (front en la nube descartado).
+**Estado al 2026-10-07:** AWS recreado en lab nuevo con 4 EC2 (bff, orders, catalog, report); verificado 401 sin token/token basura, preflight 200, BFF→3 micros por IP privada y micros cerrados desde internet. Falta probar con login real. **Antes (2026-09-23):** end-to-end con login real vía Gateway OK: los 3 roles funcionan en el front y curl con `cliente01` da GET 200 / DELETE 403 (del BFF). La Postgres de la EC2 es distinta de la local (arrancó vacía). IP de casa actual en la regla 22: `179.56.215.178`. El usuario decidió **dejar el front local** para la evaluación (front en la nube descartado).
 
 Tip curl en PowerShell: copiar comandos del chat pisa el portapapeles. Definir primero `function Tok { $script:TOKEN = [regex]::Match((Get-Clipboard -Raw), 'eyJ[\w-]+\.[\w-]+\.[\w-]+').Value; $TOKEN.Split('.').Count }`, luego copiar el `Authorization` desde F12 > Network > `orders` y escribir `Tok` a mano (debe dar 3).
 
-Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-052299a94765b3fa1 i-05f86c911b907db2a` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 de **ambos** SG para poder entrar por SSH.
+Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-0a518779b3ba0f5c6 i-012041b5cf34208ec i-0f86426497fc6d729 i-0ea543f36ccbec2fb` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 de **ambos** SG (`talleres360-bff` y `talleres360-ms`) para poder entrar por SSH.
 
 ### Pruebas pendientes (end-to-end por AWS, sacar captura de cada una)
 
-Gateway: `GW=https://sapz07gi18.execute-api.us-east-1.amazonaws.com`. Token: F12 > Application > Session Storage > clave con `accesstoken` > campo `secret`; en PowerShell `$TOKEN = Read-Host "token"` (nunca pegarlo en el chat).
+Gateway: `GW=https://qh4loqw8v1.execute-api.us-east-1.amazonaws.com`. Token: F12 > Application > Session Storage > clave con `accesstoken` > campo `secret`; en PowerShell `$TOKEN = Read-Host "token"` (nunca pegarlo en el chat).
 
 | # | Prueba | Esperado | Estado |
 |---|---|---|---|
 | 1 | `curl.exe -i $GW/api/orders` sin token | 401 del **Gateway** | ✔ |
 | 2 | Token basura contra el Gateway | 401 `invalid_token` (no llega al BFF) | ✔ |
 | 3 | Preflight OPTIONS desde `localhost:5173` | 200 con `access-control-allow-origin` | ✔ |
-| 4 | Login `tomas` (Admin) en el front → lista carga desde AWS | 200, se ven órdenes | ✔ |
+| 4 | Login `tomas` (Admin) en el front → lista carga desde AWS (lab nuevo: base vacía) | 200 | ☐ |
 | 5 | Admin: crear orden, aceptar, pasar por estados hasta ENTREGADA | 201 / 200; entregar sin aceptar → 409 | ☐ |
 | 6 | Admin: editar (solo RECIBIDA) y eliminar | 200 / 204 | ☐ |
 | 7 | `operador01` en incógnito: crea y cambia estado, **no** ve Eliminar | UI según rol | ✔ |
@@ -188,9 +199,13 @@ Gateway: `GW=https://sapz07gi18.execute-api.us-east-1.amazonaws.com`. Token: F12
 | 9 | curl con token de `cliente01`: `GET $GW/api/orders` → 200; `DELETE $GW/api/orders/1` → **403** | 403 del **BFF** (pasó el Gateway) | ✔ |
 | 10 | curl con token de `operador01`: `DELETE` → 403; `GET` → 200 | 403 / 200 | ☐ |
 | 11 | curl con token de `tomas`: `GET` → 200 | 200 | ☐ |
-| 12 | (Opcional) Swagger de orders no es alcanzable desde afuera (`http://98.89.96.254:8081` y `:8080` no responden) | timeout | ✔ |
+| 12 | (Opcional) Swagger de orders no es alcanzable desde afuera (`:8081`, `:8082`, `:8083` en las EIP de orders/catalog/report no responden) | timeout | ✔ |
+| 13 | curl token `tomas`: `POST $GW/api/products` `{"sku":"FILTRO-001","name":"Filtro de aceite","price":12000,"stock":5,"active":true}` → 201; `GET $GW/api/products` → 200 | 201 / 200 (BFF agrega `X-Internal-Key`) | ☐ |
+| 14 | curl token `operador01`: `GET $GW/api/products` → 200; `POST` → 403; `GET $GW/api/reports/audit` → 403 | 200 / 403 / 403 | ☐ |
+| 15 | curl token `tomas`: `GET "$GW/api/reports/sales?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z"` → 200 (0 ventas: orders no publica eventos) | 200 | ☐ |
+| 16 | `cliente01`: `GET $GW/api/products` → 403 | 403 | ☐ |
 
-Para la defensa, mostrar en la consola: EC2 `ec2-apps` corriendo, SG, API Gateway (rutas, autorizador JWT con issuer/audience, CORS) y en Entra ID el tenant con los 3 usuarios y sus roles.
+Para la defensa, mostrar en la consola: las 4 EC2 corriendo, SG, API Gateway (rutas, autorizador JWT con issuer/audience, CORS) y en Entra ID el tenant con los 3 usuarios y sus roles.
 
 ### Lo que falta por hacer
 
