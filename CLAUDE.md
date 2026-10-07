@@ -149,6 +149,7 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
    | `ec2-orders` | `i-012041b5cf34208ec` | `184.73.218.224` | `172.31.46.231` | `talleres360-backend` (`infra/ms/compose.yml`) | `infra/ms/.env` | 8081 |
    | `ec2-catalog` | `i-0f86426497fc6d729` | `3.213.56.98` | `172.31.47.105` | `talleres360-catalog` | `.env` | 8082 |
    | `ec2-report` | `i-0ea543f36ccbec2fb` | `3.216.5.151` | `172.31.46.51` | `talleres360-report` | `.env` | 8083 |
+   | `ec2-notify` | `i-0cb441a7d8b3f41d4` | `34.192.255.122` | `172.31.39.248` | `talleres360-notify` | `.env` | 8084 (sin regla en el SG: nadie lo llama aún) |
 
    - Cada micro tiene su propio Postgres en su VM (sin puerto publicado). Las bases del lab nuevo arrancaron vacías.
    - catalog y report (de Emmanuel, copiados a `odbtms/talleres360-catalog` y `odbtms/talleres360-report` con su historial) exigen la cabecera `X-Internal-Key`; la agrega el BFF con `INTERNAL_API_KEY` (misma clave en los 3 `.env`, generada al azar, solo en las EC2). Nuestro ms-orders **no** los llama: el stock no se descuenta y reportes queda vacío (decisión del usuario; la versión integrada es `EmmanuelhxGG/ms-ordenes-talleres360` + rama `bff-emmanuel`).
