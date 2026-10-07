@@ -66,16 +66,11 @@ Orders sigue en este repo (`ms-talleres360-orders/`); BFF, catalog y report en r
 - Variables en `infra/apps/.env` (ignorado por git); plantilla en `infra/apps/.env.example`: `DB_USERNAME`, `DB_PASSWORD`, `ENTRA_TENANT_ID`, `API_CLIENT_ID`, `CORS_ALLOWED_ORIGINS`.
 
 ### Frontend (`../talleres360-frontend/`)
-- React 19 + Vite 8, **JavaScript** (el tutorial usa TypeScript → pendiente migrar).
-- Puerto fijo 5173 (`strictPort`).
-- Pantalla única: tabla con filtros (estado, desde/hasta), formulario crear/editar con ítems, panel de detalle con botones solo para transiciones válidas, eliminar, alerta con errores del backend.
-- `src/api/http.js`: URL base desde `VITE_API_BASE_URL` (default `http://localhost:8081`) + `setTokenProvider()` que agrega `Authorization: Bearer`.
-- `src/constants/orderStatus.js` replica las transiciones de `OrderStatus.java`.
-- **Login con Entra ID ya implementado** igual que el tutorial: `@azure/msal-browser@5.21` + `@azure/msal-react@5.7`, `loginPopup` con `prompt: select_account`, `redirect.html` (`broadcastResponseToMainFrame`), Vite multipágina, `sessionStorage`, `acquireTokenSilent` → `acquireTokenPopup`, `logoutPopup`. Archivos en `src/auth/` (`authConfig.js`, `token.js`, `AuthGate.jsx`, `LoginPage.jsx`).
-- Variables en `.env.local` (nombres del tutorial): `VITE_ENTRA_TENANT_ID`, `VITE_SPA_CLIENT_ID`, `VITE_API_CLIENT_ID`, `VITE_API_BASE_URL`.
-- **Modo local**: si faltan los 3 IDs de Entra, el login muestra aviso + botón "Entrar en modo local (solo desarrollo)". Con los IDs completos el login Microsoft es obligatorio. Header muestra usuario y "Cerrar sesión".
-- `AuthGate` monta la app recién después de registrar el token provider (si no, la primera llamada saldría sin token).
-- Login real **aún no probado**: faltan los IDs reales de Entra ID.
+- Desde 2026-10-07 `main` = interfaz de Emmanuel (rama `fronted`: React 19 + Vite 8 + **TypeScript**, sitio público, menú lateral, dashboard, productos, reportes) **adaptada a nuestro backend** (commit `11b1b64`; el usuario eligió no usar el `ms-ordenes` de Emmanuel).
+- Qué se adaptó: sin `/api/appointments`, `/technical` ni `/stock` (no existen en ms-orders). Agendamiento queda informativo; "Mi revisión técnica" (Cliente) = `GET /api/orders` filtrado en el navegador por el correo de la sesión; `OrderItemsForm` asigna repuestos del catálogo con `PUT /api/orders/{id}` (solo RECIBIDA, `unitPrice` = precio del catálogo); nueva orden sin RUT/teléfono; cambio de estado sin motivo.
+- Rol → vista: Cliente ve el sitio público + Mi revisión técnica; Operador órdenes (sin eliminar); Admin además Dashboard, Productos y Reportes. Ventas/auditoría salen en 0 porque ms-orders no publica eventos a report.
+- Login MSAL igual que antes (`src/auth/`, popup + `redirect.html`, `sessionStorage`, roles leídos del access token). Ya **no hay modo local** sin IDs de Entra: muestra el sitio público con aviso.
+- Variables en `.env.local`: `VITE_ENTRA_TENANT_ID`, `VITE_SPA_CLIENT_ID`, `VITE_API_CLIENT_ID`, `VITE_API_BASE_URL` (URL del Gateway, sin `/dev`). `npm run build` corre `tsc --noEmit` antes.
 
 ## Arquitectura objetivo (acordada, aún no implementada)
 
@@ -214,7 +209,7 @@ Para la defensa, mostrar en la consola: las 4 EC2 corriendo, SG, API Gateway (ru
 3. [ ] (Opcional) **Java 21**: el caso pide Java 21 (hoy 17). Instalar JDK 21, subir `java.version` en ambos `pom.xml` y la imagen base de los Dockerfile; luego `git pull` + rebuild en la EC2.
 4. [—] (Descartado por el usuario) **Front en la nube**. Ojo si se retoma: fuera de localhost Entra exige redirect URI **https** y MSAL no funciona en http (opción: Caddy + `<ip>.sslip.io`). La rúbrica dice "despliega backend y frontend en la nube". Hoy el front corre local. Opción simple: `npm run build` y servir `dist/` (S3 static website o un contenedor nginx en la misma EC2). Si cambia el origen: agregar la URL en spa-cloud > Autenticación (redirect URIs `.../` y `.../redirect.html`), en el CORS del API Gateway y en `CORS_ALLOWED_ORIGINS`.
 5. [ ] (Opcional) Base de datos "cloud": hoy Postgres corre en Docker dentro de la EC2 (ya está en la nube). Si el profe exige servicio gestionado, mover a RDS.
-6. [ ] (Opcional) Migrar el front a TypeScript como el tutorial.
+6. [x] Front en TypeScript (vino con la interfaz de Emmanuel).
 
 
 **Modo 100 % local** (sin AWS): cambiar `VITE_API_BASE_URL=http://localhost:8080` en `.env.local`. Para levantar de nuevo: iniciar Docker Desktop, `docker compose -f infra/apps/compose.yml up -d --build` y `npm run dev` en el front. Los archivos de entorno (`infra/apps/.env` y `talleres360-frontend/.env.local`) ya están escritos en el disco local; **no están en git**, así que en otra máquina (o en la EC2) hay que recrearlos a partir de `infra/apps/.env.example`.
