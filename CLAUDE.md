@@ -19,6 +19,7 @@ Evaluación Final Transversal DSY1107 (Desarrollo Cloud Native I). Caso "Tallere
 | `taller-360/talleres360-frontend/` | https://github.com/odbtms/talleres360-frontend (público) | SPA React |
 | `taller-360/talleres360-catalog/` | https://github.com/odbtms/talleres360-catalog (público) | ms-catalog (8082) de Emmanuel, copiado de `EmmanuelhxGG/ms-catalogo-talleres360` (rama `backend-emmanuel` → `main`) |
 | `taller-360/talleres360-report/` | https://github.com/odbtms/talleres360-report (público) | ms-report (8083) de Emmanuel, copiado de `EmmanuelhxGG/ms-reportes-talleres360` |
+| `taller-360/talleres360-notify/` | https://github.com/odbtms/talleres360-notify (público) | ms-notify (8084): correo, ticket de taller y boleta. Futuro consumidor de RabbitMQ; hoy recibe comandos por REST (`POST /internal/notifications`, `X-Internal-Key`), idempotente por `eventId`, envío simulado en el log |
 
 Rama `main` en todos, remoto `origin`. `gh` autenticado como `odbtms` (HTTPS). Los README de catalog/report todavía dicen `git pull origin backend-emmanuel`: en nuestros repos es `main`.
 
@@ -153,7 +154,7 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
    - catalog y report (de Emmanuel, copiados a `odbtms/talleres360-catalog` y `odbtms/talleres360-report` con su historial) exigen la cabecera `X-Internal-Key`; la agrega el BFF con `INTERNAL_API_KEY` (misma clave en los 3 `.env`, generada al azar, solo en las EC2). Nuestro ms-orders **no** los llama: el stock no se descuenta y reportes queda vacío (decisión del usuario; la versión integrada es `EmmanuelhxGG/ms-ordenes-talleres360` + rama `bff-emmanuel`).
    - BFF `.env`: IDs de Entra + `ORDERS_URL`/`CATALOG_URL`/`REPORT_URL` con las IP privadas + `INTERNAL_API_KEY`.
    - SG `talleres360-bff` `sg-06f105cba9fe78bdb`: 22 desde la IP de casa, 8080 abierto (destino del Gateway).
-   - SG `talleres360-ms` `sg-0a254951951e7cee7` (orders, catalog, report): 22 desde la IP de casa, **8081-8083 solo desde el SG del BFF**. Verificado: desde internet no responden.
+   - SG `talleres360-ms` `sg-0a254951951e7cee7` (orders, catalog, report, notify): 22 desde la IP de casa, **8081-8083 solo desde el SG del BFF**. Verificado: desde internet no responden.
    - API Gateway HTTP API `talleres360-api` (`qh4loqw8v1`): **`https://qh4loqw8v1.execute-api.us-east-1.amazonaws.com`**. Autorizador JWT `entra-jwt` (`kdar05`; issuer del tenant v2.0, audiences `API_CLIENT_ID` y `api://API_CLIENT_ID`, scope `access_as_user`). Rutas: `ANY /api/{proxy+}` (JWT) y `OPTIONS /api/{proxy+}` (sin auth), ambas → integración `jo5ja2p` = `http://34.202.46.77:8080/api/{proxy}` (el BFF). CORS `http://localhost:5173`. Stage `$default` auto-deploy.
    - Rutas del BFF: `/api/orders/**` (como antes), `/api/products/**` (GET Admin/Operador, POST/PUT Admin), `/api/reports/**` (GET Admin). El front aún no tiene pantallas de catálogo ni reportes.
    - Gotcha: sin la ruta OPTIONS sin auth, el preflight CORS da 401 (la ruta ANY con JWT atrapa OPTIONS). Una ruta OPTIONS **sin target** tampoco sirve; tiene que ir a la integración.
@@ -175,7 +176,7 @@ Capturas del portal se pegan en la terminal con `Alt + V`. **Nunca** enviar clie
 
 Tip curl en PowerShell: copiar comandos del chat pisa el portapapeles. Definir primero `function Tok { $script:TOKEN = [regex]::Match((Get-Clipboard -Raw), 'eyJ[\w-]+\.[\w-]+\.[\w-]+').Value; $TOKEN.Split('.').Count }`, luego copiar el `Authorization` desde F12 > Network > `orders` y escribir `Tok` a mano (debe dar 3).
 
-Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-0a518779b3ba0f5c6 i-012041b5cf34208ec i-0f86426497fc6d729 i-0ea543f36ccbec2fb` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 de **ambos** SG (`talleres360-bff` y `talleres360-ms`) para poder entrar por SSH.
+Para retomar AWS: Start Lab → pegar credenciales nuevas en `~/.aws/credentials [default]` → `aws ec2 start-instances --instance-ids i-0a518779b3ba0f5c6 i-012041b5cf34208ec i-0f86426497fc6d729 i-0ea543f36ccbec2fb i-0cb441a7d8b3f41d4` (la Elastic IP no cambia y los contenedores arrancan solos por `restart: unless-stopped`) → `npm run dev` en el front (ya apunta al Gateway). Si la IP de casa cambió, actualizar la regla 22 de **ambos** SG (`talleres360-bff` y `talleres360-ms`) para poder entrar por SSH.
 
 ### Pruebas pendientes (end-to-end por AWS, sacar captura de cada una)
 
@@ -242,3 +243,15 @@ cd ../talleres360-frontend && npm run dev   # http://localhost:5173
 - Los app roles se asignan en **Aplicaciones empresariales > api-cloud > Usuarios y grupos**, no en el registro de aplicación.
 - El rol se asigna a una identidad concreta: `tomas@tocortess.onmicrosoft.com` (nativo) y `to.cortess@duocuc.cl` (invitado `#EXT#`) son usuarios distintos. La contraseña de un invitado no se puede resetear desde el tenant; la de un usuario nativo sí (Entra ID > Usuarios > usuario > Restablecer contraseña).
 - Tras asignar un rol hay que **cerrar sesión y volver a entrar**: MSAL cachea el token en `sessionStorage`.
+
+## Próximo: RabbitMQ (2026-10-07)
+
+Referencia: `Doc1_modelo.docx` en el Escritorio (diagrama: front → API Manager → BFF → orders/catalog/report/audit; orders produce a RabbitMQ y Kafka; notify consume RabbitMQ; report/audit consumen Kafka; BD Oracle en OCI). Kafka y ms-audit quedan para después (decisión del usuario).
+
+- [x] ms-notify creado y desplegado en `ec2-notify` (sin conectar a nada).
+- [ ] Clúster RabbitMQ con compose (`ec2-mq`, varios nodos + management UI).
+- [ ] Topología del enunciado: `q.cmd.email`, `q.cmd.workshop`, `q.cmd.invoice` + sus `.dlq`; exchanges `cmd.direct`, `cmd.topic`, `cmd.dead.dlx`.
+- [ ] orders produce (`email.send`, `workshop.ticket`, `invoice.gen`) con el envelope común; notify consume con `@RabbitListener` → `NotificationService.process()`, ACK/NACK explícitos.
+- [ ] Consumidor de DLQ que loguee los mensajes no entregados (rúbrica).
+- [ ] Microservicio administrador de colas/exchanges/bindings (rúbrica; no aparece en el diagrama). Definir si va aparte o dentro de notify.
+- [ ] Otras brechas vs. el caso: stock no decrece al aceptar (orders no llama a catalog `PUT /internal/stock-reservations`), Java 21, Swagger en BFF/catalog/report, BD Oracle en OCI (preguntar al profe si acepta Postgres en EC2).
